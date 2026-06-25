@@ -1,0 +1,24 @@
+project_id = "tlabaunrsrgaowavksyf"
+
+[analytics]
+enabled = false
+
+[storage]
+enabled = false
+
+[api]
+schemas = ["public", "graphql_public", "memo"]
+extra_search_path = ["public", "extensions"]
+
+[auth]
+additional_redirect_urls = [
+  "http://localhost:3000/**",
+  "http://127.0.0.1:3000/**",
+]
+
+# Shared local stack: Google OAuth used by BeenThere (and available to keptcare).
+# Export these env vars before `supabase start`.
+[auth.external.google]
+enabled = true
+client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
+secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"

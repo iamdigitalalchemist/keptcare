@@ -1,0 +1,3 @@
+firstName,lastName,email,phone,dateOfBirth,gender,lastVisit,nextAppointment,visitCount,status,tags,consentSms,consentEmail,consentWhatsapp,notes
+Amelia,Smith,amelia.smith@example.com,+1555010101,1988-04-12,female,2026-05-20,2026-06-12,6,active,"cleaning;whitening",true,true,false,Prefers morning appointments
+Noah,Johnson,noah.johnson@example.com,+1555010102,1979-11-03,male,2026-04-18,,3,inactive,checkup,false,true,false,
