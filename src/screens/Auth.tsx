@@ -28,7 +28,7 @@ export default function AuthPage() {
       if (error) {
         toast.error(error.message);
       } else {
-        router.push(inviteToken ? `/accept-invite?token=${encodeURIComponent(inviteToken)}` : "/");
+        router.push(inviteToken ? `/accept-invite?token=${encodeURIComponent(inviteToken)}` : "/dashboard");
       }
     } else {
       const { error } = await supabase.auth.signUp({
@@ -41,7 +41,7 @@ export default function AuthPage() {
           },
           emailRedirectTo: inviteToken
             ? `${window.location.origin}/accept-invite?token=${encodeURIComponent(inviteToken)}`
-            : window.location.origin,
+            : `${window.location.origin}/dashboard`,
         },
       });
       if (error) {

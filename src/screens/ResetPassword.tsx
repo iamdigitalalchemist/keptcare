@@ -29,7 +29,7 @@ export default function ResetPasswordPage() {
     if (error) toast.error(error.message);
     else {
       toast.success("Password updated successfully.");
-      router.push("/");
+      router.push("/dashboard");
     }
     setLoading(false);
   };

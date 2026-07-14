@@ -9,3 +9,8 @@ local.env
 
 *.log
 .DS_Store
+.vercel
+.env*
+
+supabase/.temp/
+tsconfig.tsbuildinfo

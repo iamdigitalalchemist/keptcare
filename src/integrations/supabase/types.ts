@@ -276,33 +276,42 @@ export type Database = {
       }
       communication_logs: {
         Row: {
+          body: string
           channel: string
           created_at: string
+          error_message: string
           id: string
           organisation_id: string
           patient_id: string
+          provider_message_sid: string | null
           sent_at: string
           status: string
           subject: string
           updated_at: string
         }
         Insert: {
+          body?: string
           channel: string
           created_at?: string
+          error_message?: string
           id?: string
           organisation_id: string
           patient_id: string
+          provider_message_sid?: string | null
           sent_at: string
           status: string
           subject?: string
           updated_at?: string
         }
         Update: {
+          body?: string
           channel?: string
           created_at?: string
+          error_message?: string
           id?: string
           organisation_id?: string
           patient_id?: string
+          provider_message_sid?: string | null
           sent_at?: string
           status?: string
           subject?: string
@@ -688,10 +697,13 @@ export type Database = {
           id: string
           logo_url: string | null
           name: string
+          payfast_token: string | null
+          pending_tier: Database["public"]["Enums"]["subscription_tier"] | null
           phone: string | null
           slug: string | null
           status: string
           subscription_active: boolean
+          subscription_period_end: string | null
           subscription_tier: Database["public"]["Enums"]["subscription_tier"]
           trial_ends_at: string
           updated_at: string
@@ -704,10 +716,13 @@ export type Database = {
           id?: string
           logo_url?: string | null
           name?: string
+          payfast_token?: string | null
+          pending_tier?: Database["public"]["Enums"]["subscription_tier"] | null
           phone?: string | null
           slug?: string | null
           status?: string
           subscription_active?: boolean
+          subscription_period_end?: string | null
           subscription_tier?: Database["public"]["Enums"]["subscription_tier"]
           trial_ends_at?: string
           updated_at?: string
@@ -720,16 +735,66 @@ export type Database = {
           id?: string
           logo_url?: string | null
           name?: string
+          payfast_token?: string | null
+          pending_tier?: Database["public"]["Enums"]["subscription_tier"] | null
           phone?: string | null
           slug?: string | null
           status?: string
           subscription_active?: boolean
+          subscription_period_end?: string | null
           subscription_tier?: Database["public"]["Enums"]["subscription_tier"]
           trial_ends_at?: string
           updated_at?: string
           website?: string | null
         }
         Relationships: []
+      }
+      payfast_payments: {
+        Row: {
+          amount_gross: number | null
+          created_at: string
+          id: string
+          m_payment_id: string | null
+          organisation_id: string | null
+          payment_status: string
+          pf_payment_id: string | null
+          raw: Json
+          tier: Database["public"]["Enums"]["subscription_tier"] | null
+          token: string | null
+        }
+        Insert: {
+          amount_gross?: number | null
+          created_at?: string
+          id?: string
+          m_payment_id?: string | null
+          organisation_id?: string | null
+          payment_status: string
+          pf_payment_id?: string | null
+          raw?: Json
+          tier?: Database["public"]["Enums"]["subscription_tier"] | null
+          token?: string | null
+        }
+        Update: {
+          amount_gross?: number | null
+          created_at?: string
+          id?: string
+          m_payment_id?: string | null
+          organisation_id?: string | null
+          payment_status?: string
+          pf_payment_id?: string | null
+          raw?: Json
+          tier?: Database["public"]["Enums"]["subscription_tier"] | null
+          token?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payfast_payments_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       patient_segments: {
         Row: {

@@ -52,7 +52,7 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (!loading && !isPlatformAdmin) {
-      router.replace("/");
+      router.replace("/dashboard");
     }
   }, [isPlatformAdmin, loading, router]);
 

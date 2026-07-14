@@ -34,7 +34,7 @@ export default function AcceptInvitePage() {
 
       await refreshOrganisationAuth();
       toast.success("Invitation accepted.");
-      router.replace("/");
+      router.replace("/dashboard");
     };
 
     acceptInvite();

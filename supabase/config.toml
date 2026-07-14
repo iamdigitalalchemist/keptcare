@@ -7,7 +7,7 @@ enabled = false
 enabled = false
 
 [api]
-schemas = ["public", "graphql_public", "memo"]
+schemas = ["public", "graphql_public", "memo", "muststash"]
 extra_search_path = ["public", "extensions"]
 
 [auth]
