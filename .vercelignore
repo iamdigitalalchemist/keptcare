@@ -1,0 +1,4 @@
+# Never upload local env files with CLI deploys — Vercel project env vars are
+# the source of truth for builds and runtime.
+.env*
+local.env
