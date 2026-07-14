@@ -66,3 +66,36 @@ See `.env.example`. Required: `PAYFAST_MERCHANT_ID`, `PAYFAST_MERCHANT_KEY`,
 `POST /api/payfast/cancel` cancels the PayFast subscription token via the
 management API. Access remains until `subscription_period_end`; only future
 charges stop.
+
+## Go-live checklist (swap sandbox → live)
+
+The code needs NO changes to launch — it's entirely an environment swap on
+Vercel (Production env), followed by a redeploy:
+
+1. `PAYFAST_MERCHANT_ID` / `PAYFAST_MERCHANT_KEY` — live values from
+   my.payfast.io → Settings → Developer Settings.
+2. `PAYFAST_PASSPHRASE` — must match the passphrase set on the LIVE account
+   (set one; it strengthens every signature).
+3. `PAYFAST_SANDBOX=false` — switches both the checkout host and the
+   server-confirmation host to www.payfast.co.za.
+4. Redeploy (env changes only apply to new deployments).
+
+Before flipping the switch, also:
+
+- **Set real prices**: `PLAN_PRICES_ZAR` in `src/lib/payfast.ts` still holds
+  placeholder amounts (R79/R149 mirroring the £ page prices). The ITN validates
+  the paid amount against these to the cent, so they must be the real ZAR
+  prices you intend to charge.
+- **Custom domain**: if launching on a custom domain, update
+  `NEXT_PUBLIC_APP_URL` (return/cancel/notify URLs derive from it) and the
+  Supabase Auth URL configuration.
+- The live PayFast account must be verified (FICA) and have subscriptions
+  enabled, or the checkout will be rejected.
+
+Notification handling reference (`/api/payfast/notify`):
+
+| payment_status | Effect |
+| --- | --- |
+| `COMPLETE` | Activate org, set tier, extend `subscription_period_end` +1 month, store token (fires on first charge AND every monthly renewal) |
+| `CANCELLED` | Clear the stored token; access continues until `subscription_period_end`, then lapses (enforced client-side with a 3-day grace) |
+| anything else (`FAILED`, `PENDING`, …) | Recorded in `payfast_payments` audit log only; a failed renewal simply lets the period lapse |

@@ -14,6 +14,7 @@ export interface Organisation {
   subscription_tier: Tier;
   trial_ends_at: string;
   subscription_active: boolean;
+  subscription_period_end: string | null;
   status: string;
 }
 
@@ -98,6 +99,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const [tier, setTier] = useState<Tier>("starter");
   const [trialEndsAt, setTrialEndsAt] = useState<Date | null>(null);
   const [subscriptionActive, setSubscriptionActive] = useState(false);
+  const [periodEnd, setPeriodEnd] = useState<Date | null>(null);
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [organisation, setOrganisation] = useState<Organisation | null>(null);
   const [membership, setMembership] = useState<OrganisationMembership | null>(null);
@@ -143,10 +145,14 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       setTier(nextOrganisation.subscription_tier);
       setTrialEndsAt(nextOrganisation.trial_ends_at ? new Date(nextOrganisation.trial_ends_at) : null);
       setSubscriptionActive(nextOrganisation.subscription_active);
+      setPeriodEnd(
+        nextOrganisation.subscription_period_end ? new Date(nextOrganisation.subscription_period_end) : null,
+      );
     } else {
       setTier("starter");
       setTrialEndsAt(null);
       setSubscriptionActive(false);
+      setPeriodEnd(null);
     }
 
     setLoading(false);
@@ -157,7 +163,14 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   }, [fetchSubscription]);
 
   const isTrialActive = trialEndsAt ? new Date() < trialEndsAt : false;
-  const isSubscriptionActive = subscriptionActive || isTrialActive;
+  // Paid access lapses at subscription_period_end, set by the PayFast ITN on
+  // each successful charge (and left in place on cancellation so the org keeps
+  // what it paid for). The 3-day grace absorbs late renewal notifications.
+  // A null period end (org activated before billing existed) never expires.
+  const PERIOD_END_GRACE_MS = 3 * 24 * 60 * 60 * 1000;
+  const isPaidActive =
+    subscriptionActive && (!periodEnd || Date.now() < periodEnd.getTime() + PERIOD_END_GRACE_MS);
+  const isSubscriptionActive = isPaidActive || isTrialActive;
   const isOrgAdmin = membership?.role?.key === "org_admin";
   const isAdmin = isPlatformAdmin;
 
