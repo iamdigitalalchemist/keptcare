@@ -339,7 +339,9 @@ export default function Home() {
       {/* ============ NAV ============ */}
       <header className="fixed top-0 inset-x-0 z-50 border-b border-white/10 bg-[hsl(210,35%,7%)]/80 backdrop-blur-lg">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <Logo dark />
+          <Link href="/" className="flex items-center gap-2.5">
+          <img src="/logo.png" alt="KeptCare" className="h-8 w-auto" />
+          </Link>
           <nav className="hidden md:flex items-center gap-7 text-sm text-white/60">
             <a href="#features" className="hover:text-white transition-colors">Features</a>
             <a href="#how-it-works" className="hover:text-white transition-colors">How it works</a>
@@ -658,6 +660,9 @@ export default function Home() {
           </div>
           <div className="mt-8 pt-8 border-t border-white/10 text-center text-xs text-white/35">
             © {new Date().getFullYear()} KeptCare. Patient CRM for healthcare practices.
+          </div>
+           <div className="mt-8 pt-8 border-t border-white/10 text-center text-xs text-white/35">
+            Terms and Conditions
           </div>
         </div>
       </footer>
