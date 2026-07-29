@@ -343,7 +343,7 @@ export default function Home() {
   <img
     src="/logo.png"
     alt="KeptCare"
-    className="h-10 w-auto sm:h-11 md:h-12"
+    className="h-30 w-auto sm:h-11 md:h-12"
   />
 </Link>
           <nav className="hidden md:flex items-center gap-7 text-sm text-white/60">
