@@ -116,7 +116,7 @@ const steps = [
 const plans = [
   {
     name: "Starter",
-    price: 29,
+    price: 3500,
     description: "For solo practitioners getting started",
     features: [
       "Up to 200 patients",
@@ -129,7 +129,7 @@ const plans = [
   },
   {
     name: "Growth",
-    price: 79,
+    price: 5000,
     description: "For growing practices",
     features: [
       "Up to 1,000 patients",
@@ -144,7 +144,7 @@ const plans = [
   },
   {
     name: "Pro",
-    price: 149,
+    price: 7000,
     description: "For established multi-location practices",
     features: [
       "Unlimited patients",
@@ -340,12 +340,12 @@ export default function Home() {
       <header className="fixed top-0 inset-x-0 z-50 border-b border-white/10 bg-[hsl(210,35%,7%)]/80 backdrop-blur-lg">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5">
-          <img
-          src="/logo.png"
-          alt="KeptCare"
-          className="h-6 w-auto sm:h-7 md:h-8 lg:h-9 max-w-[140px] sm:max-w-[160px] md:max-w-none"
-          />
-          </Link>
+  <img
+    src="/logo.png"
+    alt="KeptCare"
+    className="h-10 w-auto sm:h-11 md:h-12"
+  />
+</Link>
           <nav className="hidden md:flex items-center gap-7 text-sm text-white/60">
             <a href="#features" className="hover:text-white transition-colors">Features</a>
             <a href="#how-it-works" className="hover:text-white transition-colors">How it works</a>
@@ -576,7 +576,7 @@ export default function Home() {
                 <h3 className="font-semibold text-lg">{plan.name}</h3>
                 <p className="text-sm text-muted-foreground mt-1">{plan.description}</p>
                 <div className="mt-5 flex items-baseline gap-1">
-                  <span className="text-4xl font-bold tracking-tight">£{plan.price}</span>
+                  <span className="text-4xl font-bold tracking-tight">R{plan.price}</span>
                   <span className="text-sm text-muted-foreground">/month</span>
                 </div>
                 <PlanCta popular={plan.popular} />
