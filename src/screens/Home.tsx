@@ -340,7 +340,11 @@ export default function Home() {
       <header className="fixed top-0 inset-x-0 z-50 border-b border-white/10 bg-[hsl(210,35%,7%)]/80 backdrop-blur-lg">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5">
-          <img src="/logo.png" alt="KeptCare" className="h-8 w-auto" />
+          <img
+          src="/logo.png"
+          alt="KeptCare"
+          className="h-6 w-auto sm:h-7 md:h-8 lg:h-9 max-w-[140px] sm:max-w-[160px] md:max-w-none"
+          />
           </Link>
           <nav className="hidden md:flex items-center gap-7 text-sm text-white/60">
             <a href="#features" className="hover:text-white transition-colors">Features</a>
