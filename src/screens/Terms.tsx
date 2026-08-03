@@ -34,7 +34,7 @@ export default function Terms() {
           Terms &amp; Policies
         </h1>
         <p className="mt-3 text-muted-foreground">
-          KeptCare (Pty) Ltd · Effective Date: 1 August 2025 · Last Updated: 1 August 2025
+          KeptCare (Pty) Ltd · Effective Date: 1 August 2026 · Last Updated: 1 August 2026
         </p>
 
         {/* Table of contents */}
