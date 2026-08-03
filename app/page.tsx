@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Home from "@/screens/Home";
 
+
 export const metadata: Metadata = {
   title: "KeptCare — The patient CRM that keeps patients coming back",
   description:

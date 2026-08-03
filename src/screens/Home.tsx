@@ -116,7 +116,7 @@ const steps = [
 const plans = [
   {
     name: "Starter",
-    price: 3,500,
+    price: "3,500",
     description: "For solo practitioners getting started",
     features: [
       "Up to 200 patients",
@@ -129,7 +129,7 @@ const plans = [
   },
   {
     name: "Growth",
-    price: 5,000,
+    price: "5,000",
     description: "For growing practices",
     features: [
       "Up to 1,000 patients",
@@ -144,7 +144,7 @@ const plans = [
   },
   {
     name: "Pro",
-    price: 7,000,
+    price: "7,000",
     description: "For established multi-location practices",
     features: [
       "Unlimited patients",
