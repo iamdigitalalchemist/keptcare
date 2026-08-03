@@ -99,9 +99,9 @@ export default function Terms() {
             <h3>4. Subscription and Access</h3>
             <p>4.1 KeptCare offers the following subscription tiers:</p>
             <ul>
-              <li>Starter Plan — R1,500 per month (approx. $90 USD)</li>
-              <li>Growth Plan — R2,480 per month (approx. $149 USD)</li>
-              <li>Practice Pro Plan — R4,140 per month (approx. $249 USD)</li>
+              <li>Starter Plan — R3,500 per month (approx. $90 USD)</li>
+              <li>Growth Plan — R5,000 per month (approx. $149 USD)</li>
+              <li>Practice Pro Plan — R7,000 per month (approx. $249 USD)</li>
             </ul>
             <p>
               4.2 A once-off setup fee of R2,480 (approx. $149 USD) applies to all new
