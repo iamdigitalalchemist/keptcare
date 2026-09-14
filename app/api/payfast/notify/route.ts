@@ -5,8 +5,10 @@ import {
   validSourceIp,
   validServerConfirmation,
   validAmount,
+  PLAN_PRICES_ZAR,
   type Tier,
 } from "@/lib/payfast";
+import { setSubscriptionNextRun } from "@/lib/payfast-api";
 
 export const runtime = "nodejs";
 
@@ -15,8 +17,13 @@ export const runtime = "nodejs";
 // PayFast calls this server-to-server after every payment and each recurring
 // renewal. We NEVER trust the payload alone. Four checks must all pass before we
 // grant access: (1) signature, (2) source IP, (3) server postback confirmation,
-// (4) amount matches the plan price. We always return 200 so PayFast stops
-// retrying; failures are logged but not surfaced.
+// (4) amount matches what the subscription is scheduled to bill. We always
+// return 200 so PayFast stops retrying; failures are logged but not surfaced.
+//
+// Tier attribution: custom_str2 reflects the tier at checkout time. After an
+// upgrade/downgrade the subscription bills a different amount, so renewals must
+// NOT derive the tier from custom_str2 — the DB (pending_tier ?? subscription_tier)
+// is the source of truth for what PayFast should be charging.
 export async function POST(req: Request) {
   const raw = await req.text();
   const params = new URLSearchParams(raw);
@@ -49,21 +56,48 @@ export async function POST(req: Request) {
   }
 
   const organisationId = data.custom_str1;
-  const tier = data.custom_str2 as Tier;
+  const checkoutTier = data.custom_str2 as Tier;
   const paymentStatus = data.payment_status;
 
-  if (!organisationId || (tier !== "growth" && tier !== "pro")) {
-    console.error("[payfast] ITN missing org/tier attribution", { organisationId, tier });
+  if (!organisationId || !["starter", "growth", "pro"].includes(checkoutTier)) {
+    console.error("[payfast] ITN missing org/tier attribution", { organisationId, checkoutTier });
     return new NextResponse("OK", { status: 200 });
   }
 
-  // (4) Amount check — only meaningful for a COMPLETE payment.
-  if (paymentStatus === "COMPLETE" && !validAmount(data.amount_gross, tier)) {
-    console.error("[payfast] ITN rejected: amount mismatch", {
-      amount_gross: data.amount_gross,
-      tier,
-    });
-    return new NextResponse("OK", { status: 200 });
+  // Current org state determines whether this is a subscription creation and
+  // what amount a renewal should carry.
+  const { data: org } = await supabaseAdmin
+    .from("organisations")
+    .select("payfast_token, subscription_tier, pending_tier, subscription_period_end, trial_ends_at")
+    .eq("id", organisationId)
+    .maybeSingle();
+
+  const isCreation = !org?.payfast_token && !!data.token;
+  // What this payment should carry: a creation bills the tier chosen at
+  // checkout (the DB row may still say "starter" for a first Growth/Pro
+  // signup); a renewal bills whatever the subscription is scheduled at.
+  const expectedTier: Tier = isCreation ? checkoutTier : (org?.pending_tier ?? org?.subscription_tier ?? checkoutTier);
+  const expectedZar = PLAN_PRICES_ZAR[expectedTier];
+
+  // (4) Amount check — only meaningful for a COMPLETE payment. A creation is
+  // either the R0.00 trial setup (Starter only — the trial never applies to
+  // Growth/Pro) or a full-price signup (including after a lapsed trial, or a
+  // mid-trial move to a paid tier).
+  if (paymentStatus === "COMPLETE") {
+    const isTrialSetup = isCreation && checkoutTier === "starter";
+    const ok = isTrialSetup
+      ? validAmount(data.amount_gross, expectedZar, { isTrialSetup: true }) ||
+        validAmount(data.amount_gross, expectedZar)
+      : validAmount(data.amount_gross, expectedZar);
+    if (!ok) {
+      console.error("[payfast] ITN rejected: amount mismatch", {
+        amount_gross: data.amount_gross,
+        expectedZar,
+        expectedTier,
+        isCreation,
+      });
+      return new NextResponse("OK", { status: 200 });
+    }
   }
 
   // Record the payment (audit log). The partial unique index on pf_payment_id
@@ -75,7 +109,7 @@ export async function POST(req: Request) {
     m_payment_id: data.m_payment_id ?? null,
     pf_payment_id: data.pf_payment_id ?? null,
     token: data.token ?? null,
-    tier,
+    tier: checkoutTier,
     amount_gross: data.amount_gross ? Number(data.amount_gross) : null,
     payment_status: paymentStatus ?? "UNKNOWN",
     raw: data,
@@ -89,21 +123,70 @@ export async function POST(req: Request) {
     console.error("[payfast] failed to record payment", insertErr);
   }
 
-  // Apply the state change to the organisation.
   if (paymentStatus === "COMPLETE") {
-    const periodEnd = new Date();
-    periodEnd.setMonth(periodEnd.getMonth() + 1);
-    const { error } = await supabaseAdmin
-      .from("organisations")
-      .update({
+    const oneMonthFrom = (d: Date) => {
+      const next = new Date(d);
+      next.setMonth(next.getMonth() + 1);
+      return next.toISOString();
+    };
+
+    if (isCreation) {
+      // New subscription. For a trial signup the first real charge is anchored
+      // to the trial end; the paid period then runs trial_end → +1 month, so
+      // set period end accordingly to bridge trial → paid seamlessly.
+      const trialEndsAt = org?.trial_ends_at ? new Date(org.trial_ends_at) : null;
+      const isTrialSignup =
+        checkoutTier === "starter" &&
+        Math.abs(Number(data.amount_gross)) < 0.01 &&
+        !!trialEndsAt &&
+        trialEndsAt > new Date();
+      const periodEnd = isTrialSignup
+        ? oneMonthFrom(trialEndsAt)
+        : oneMonthFrom(new Date());
+
+      const { error } = await supabaseAdmin
+        .from("organisations")
+        .update({
+          subscription_active: true,
+          subscription_tier: checkoutTier,
+          subscription_period_end: periodEnd,
+          payfast_token: data.token ?? null,
+          pending_tier: null,
+        })
+        .eq("id", organisationId);
+      if (error) console.error("[payfast] failed to activate org", error);
+
+      // Anchor the billing schedule: R0 today, first R3,500 charge on the day
+      // the trial ends, then monthly on that date.
+      if (isTrialSignup && data.token) {
+        const nextRun = trialEndsAt!.toISOString().slice(0, 10);
+        await setSubscriptionNextRun(data.token, nextRun);
+      }
+    } else {
+      // Renewal. Extend the period one month from the previous period end to
+      // keep the billing anchor stable, and apply a pending downgrade if one
+      // is scheduled (features switch now; PayFast already billed the new
+      // amount — that is what the amount check above verified).
+      const prevEnd = org?.subscription_period_end ? new Date(org.subscription_period_end) : new Date();
+      const update: { subscription_active: boolean; subscription_period_end: string; subscription_tier?: Tier; pending_tier?: Tier | null } = {
         subscription_active: true,
-        subscription_tier: tier,
-        subscription_period_end: periodEnd.toISOString(),
-        payfast_token: data.token ?? null,
-        pending_tier: null,
-      })
-      .eq("id", organisationId);
-    if (error) console.error("[payfast] failed to activate org", error);
+        subscription_period_end: oneMonthFrom(prevEnd > new Date() ? prevEnd : new Date()),
+      };
+      if (org?.pending_tier) {
+        update.subscription_tier = org.pending_tier;
+        update.pending_tier = null;
+        const { error: fnErr } = await (supabaseAdmin.rpc as any)("pause_excess_automations", {
+          _organisation_id: organisationId,
+          _new_tier: org.pending_tier,
+        });
+        if (fnErr) console.error("[payfast] failed to pause excess automations", fnErr);
+      }
+      const { error } = await supabaseAdmin
+        .from("organisations")
+        .update(update)
+        .eq("id", organisationId);
+      if (error) console.error("[payfast] failed to extend subscription", error);
+    }
   } else if (paymentStatus === "CANCELLED") {
     // Subscription cancelled by PayFast — let it lapse. We keep access until the
     // known period end (set at last successful charge); just clear the token.

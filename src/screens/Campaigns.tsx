@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Megaphone, Plus, Send, Clock, FileText, CheckCircle } from "lucide-react";
 import { AddCampaignDialog } from "@/components/AddCampaignDialog";
+import { FeatureGate } from "@/components/FeatureGate";
 import { formatDate } from "@/lib/utils";
 import { usePracticeData, usePracticeMutations } from "@/lib/practice-data";
 
@@ -23,7 +24,8 @@ export default function Campaigns() {
   const { campaigns: campaignsList, messageTemplates, patientSegments } = data;
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <FeatureGate feature="campaigns">
+      <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="page-header">Campaigns</h1>
@@ -71,6 +73,7 @@ export default function Campaigns() {
           );
         })}
       </div>
-    </div>
+      </div>
+    </FeatureGate>
   );
 }

@@ -1160,11 +1160,36 @@ export type Database = {
         }
       }
       get_current_auth_context: { Args: never; Returns: Json }
+      admin_extend_trial: {
+        Args: { _organisation_id: string; _trial_ends_at: string }
+        Returns: Json
+      }
+      admin_update_organisation_status: {
+        Args: {
+          _organisation_id: string
+          _status: string
+          _subscription_active: boolean
+        }
+        Returns: Json
+      }
+      admin_update_organisation_subscription: {
+        Args: {
+          _organisation_id: string
+          _subscription_active: boolean
+          _subscription_period_end?: string
+          _subscription_tier: Database["public"]["Enums"]["subscription_tier"]
+        }
+        Returns: Json
+      }
       get_organisation_admin_overview: {
         Args: { _organisation_id?: string }
         Returns: Json
       }
       get_platform_admin_overview: { Args: never; Returns: Json }
+      get_platform_organisation_detail: {
+        Args: { _organisation_id: string }
+        Returns: Json
+      }
       has_org_permission: {
         Args: {
           _organisation_id: string

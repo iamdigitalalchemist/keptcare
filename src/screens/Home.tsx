@@ -165,7 +165,7 @@ const faqs = [
   {
     question: "How does the free trial work?",
     answer:
-      "Every new practice gets 14 days with full access — no credit card required. When the trial ends, pick the plan that fits and keep going. Your data stays exactly where you left it.",
+      "Every new practice gets 14 days free. We ask for a card upfront but charge R0 — the first payment only goes through on day 14, when your plan begins. Cancel before then and pay nothing.",
   },
   {
     question: "Which messaging channels are supported?",
@@ -190,13 +190,13 @@ const faqs = [
   {
     question: "Can I cancel anytime?",
     answer:
-      "Anytime, in one click, from the billing page. There are no lock-in contracts — you keep access until the end of your billing period.",
+      "Anytime, in one click, from the billing page. There are no lock-in contracts — you keep access until the end of your billing period, and your data stays put if you ever come back.",
   },
 ];
 
 const highlights = [
   { value: "3", label: "messaging channels" },
-  { value: "14 days", label: "free trial, no card" },
+  { value: "14 days", label: "free trial" },
   { value: "<30 min", label: "typical setup time" },
   { value: "Unlimited", label: "recall automations on Pro" },
 ];
@@ -432,7 +432,7 @@ export default function Home() {
               className="animate-home-fade-up mt-4 text-xs text-white/40"
               style={{ animationDelay: "340ms" }}
             >
-              14-day free trial · No credit card required · Cancel anytime
+              14-day free trial · R0 charged today · Cancel anytime
             </p>
           </div>
 
@@ -644,7 +644,7 @@ export default function Home() {
             <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
               <AuthCta size="lg" className="w-full sm:w-auto text-base px-8 shadow-xl shadow-primary/30" withArrow />
             </div>
-            <p className="mt-4 text-xs text-white/40">14-day free trial · No credit card required</p>
+            <p className="mt-4 text-xs text-white/40">14-day free trial · R0 charged today</p>
           </Reveal>
         </div>
       </section>

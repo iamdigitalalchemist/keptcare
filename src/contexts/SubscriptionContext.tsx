@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./AuthContext";
+import { TIER_LIMITS, type TierLimit } from "@/lib/limits";
 
 type Tier = "starter" | "growth" | "pro";
 
@@ -15,6 +16,8 @@ export interface Organisation {
   trial_ends_at: string;
   subscription_active: boolean;
   subscription_period_end: string | null;
+  pending_tier?: Tier | null;
+  payfast_token?: string | null;
   status: string;
 }
 
@@ -50,6 +53,10 @@ interface SubscriptionContextType {
   canAccess: (feature: Feature) => boolean;
   hasPermission: (permission: string) => boolean;
   patientLimit: number;
+  /** Full tier limits (patients/automations/seats/channels) for the current tier. */
+  limits: TierLimit;
+  /** Downgrade scheduled to take effect at the next billing date, if any. */
+  pendingTier: Tier | null;
   refreshSubscription: () => Promise<void>;
   refreshOrganisationAuth: () => Promise<void>;
 }
@@ -64,15 +71,9 @@ export type Feature =
   | "bulk_messaging";
 
 const TIER_FEATURES: Record<Tier, Feature[]> = {
-  starter: [],
-  growth: ["automation", "segmentation", "messaging"],
+  starter: ["automation"],
+  growth: ["automation", "segmentation", "messaging", "campaigns"],
   pro: ["automation", "segmentation", "messaging", "campaigns", "advanced_automation", "priority_support", "bulk_messaging"],
-};
-
-const TIER_PATIENT_LIMITS: Record<Tier, number> = {
-  starter: 50,
-  growth: 500,
-  pro: Infinity,
 };
 
 const SubscriptionContext = createContext<SubscriptionContextType>({
@@ -89,7 +90,9 @@ const SubscriptionContext = createContext<SubscriptionContextType>({
   loading: true,
   canAccess: () => false,
   hasPermission: () => false,
-  patientLimit: 50,
+  patientLimit: TIER_LIMITS.starter.patients,
+  limits: TIER_LIMITS.starter,
+  pendingTier: null,
   refreshSubscription: async () => {},
   refreshOrganisationAuth: async () => {},
 });
@@ -166,10 +169,12 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   // Paid access lapses at subscription_period_end, set by the PayFast ITN on
   // each successful charge (and left in place on cancellation so the org keeps
   // what it paid for). The 3-day grace absorbs late renewal notifications.
-  // A null period end (org activated before billing existed) never expires.
+  // A NULL period end means the org has never successfully paid — that is NOT
+  // active access (org rows default subscription_active to FALSE for this
+  // reason); the trial above is what carries new orgs.
   const PERIOD_END_GRACE_MS = 3 * 24 * 60 * 60 * 1000;
   const isPaidActive =
-    subscriptionActive && (!periodEnd || Date.now() < periodEnd.getTime() + PERIOD_END_GRACE_MS);
+    subscriptionActive && !!periodEnd && Date.now() < periodEnd.getTime() + PERIOD_END_GRACE_MS;
   const isSubscriptionActive = isPaidActive || isTrialActive;
   const isOrgAdmin = membership?.role?.key === "org_admin";
   const isAdmin = isPlatformAdmin;
@@ -201,7 +206,9 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         loading,
         canAccess,
         hasPermission,
-        patientLimit: TIER_PATIENT_LIMITS[tier],
+        patientLimit: TIER_LIMITS[tier].patients,
+        limits: TIER_LIMITS[tier],
+        pendingTier: (organisation?.pending_tier as Tier | null) ?? null,
         refreshSubscription: fetchSubscription,
         refreshOrganisationAuth: fetchSubscription,
       }}

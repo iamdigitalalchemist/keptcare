@@ -21,7 +21,9 @@ import {
 } from "@/components/ui/alert-dialog";
 import { formatDate, formatNumber } from "@/lib/utils";
 import { usePracticeData, usePracticeMutations } from "@/lib/practice-data";
+import { useSubscription } from "@/contexts/SubscriptionContext";
 import { AddPatientDialog } from "@/components/AddPatientDialog";
+import { SendSmsDialog } from "@/components/SendSmsDialog";
 import { toast } from "sonner";
 
 const statusColors: Record<string, string> = {
@@ -46,10 +48,12 @@ const channelColors: Record<string, string> = {
 export default function PatientDetail() {
   const { id } = useParams();
   const router = useRouter();
-  const { data, isLoading } = usePracticeData();
+  const { data, isLoading, organisationId } = usePracticeData();
+  const { organisation } = useSubscription();
   const { updatePatient, deletePatient } = usePracticeMutations();
   const [editOpen, setEditOpen] = useState(false);
-  const { patients, appointments, communicationLogs } = data;
+  const [smsOpen, setSmsOpen] = useState(false);
+  const { patients, appointments, communicationLogs, messageTemplates } = data;
   const patient = patients.find((p) => p.id === id);
 
   if (isLoading) {
@@ -80,6 +84,14 @@ export default function PatientDetail() {
         mode="edit"
         onAdd={(updatedPatient) => updatePatient.mutate(updatedPatient)}
       />
+      <SendSmsDialog
+        open={smsOpen}
+        onOpenChange={setSmsOpen}
+        patient={patient}
+        templates={messageTemplates}
+        practiceName={organisation?.name ?? ""}
+        organisationId={organisationId}
+      />
 
       <div className="flex flex-col md:flex-row md:items-start gap-6">
         <Card className="flex-1">
@@ -104,6 +116,16 @@ export default function PatientDetail() {
                   <div className="flex gap-2 sm:justify-end">
                     <Button variant="outline" size="sm" className="h-7" onClick={() => setEditOpen(true)}>
                       <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7"
+                      disabled={!patient.consentSms || !patient.phone}
+                      title={!patient.consentSms ? "Patient has not consented to SMS" : !patient.phone ? "No phone number on file" : undefined}
+                      onClick={() => setSmsOpen(true)}
+                    >
+                      <MessageSquare className="h-3.5 w-3.5 mr-1" /> Send SMS
                     </Button>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>

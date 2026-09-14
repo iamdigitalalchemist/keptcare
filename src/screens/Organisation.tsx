@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/integrations/supabase/client";
 import { useSubscription } from "@/contexts/SubscriptionContext";
+import { limitViolation, limitLabel, TIER_LIMITS } from "@/lib/limits";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -64,7 +65,7 @@ function createInviteToken() {
 }
 
 export default function OrganisationPage() {
-  const { organisation, hasPermission } = useSubscription();
+  const { organisation, hasPermission, tier, pendingTier } = useSubscription();
   const [overview, setOverview] = useState<OrganisationOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [existingEmail, setExistingEmail] = useState("");
@@ -80,6 +81,14 @@ export default function OrganisationPage() {
     () => overview?.roles.find((role) => role.key === "staff")?.id || overview?.roles[0]?.id || "",
     [overview?.roles],
   );
+
+  // Seat cap: block new members/invites at the tier limit (the DB trigger also
+  // enforces this on the membership insert itself).
+  const activeMemberCount = useMemo(
+    () => overview?.members.filter((m) => m.status === "active").length ?? 0,
+    [overview?.members],
+  );
+  const seatsViolation = limitViolation("seats", activeMemberCount, tier, pendingTier);
 
   const loadOverview = async () => {
     setLoading(true);
@@ -249,8 +258,11 @@ export default function OrganisationPage() {
                       ))}
                     </select>
                   </div>
-                  <Button type="submit">Add User</Button>
+                  <Button type="submit" disabled={!!seatsViolation} title={seatsViolation ?? `Seats: ${activeMemberCount}/${limitLabel(TIER_LIMITS[tier].seats)}`}>
+                    Add User
+                  </Button>
                 </form>
+                {seatsViolation && <p className="text-xs text-destructive">{seatsViolation}</p>}
               </CardContent>
             </Card>
           )}
@@ -308,8 +320,11 @@ export default function OrganisationPage() {
                       ))}
                     </select>
                   </div>
-                  <Button type="submit">Create Invite</Button>
+                  <Button type="submit" disabled={!!seatsViolation} title={seatsViolation ?? `Seats: ${activeMemberCount}/${limitLabel(TIER_LIMITS[tier].seats)}`}>
+                    Create Invite
+                  </Button>
                 </form>
+                {seatsViolation && <p className="text-xs text-destructive">{seatsViolation}</p>}
                 {lastInviteLink && (
                   <div className="rounded-md border bg-muted/30 p-3">
                     <p className="text-xs text-muted-foreground mb-1">Latest invite link</p>

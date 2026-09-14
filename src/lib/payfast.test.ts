@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildSignature, validSignature, validAmount, PLAN_PRICES_ZAR } from "./payfast";
+import { buildSignature, validSignature, validAmount, PLAN_PRICES_ZAR, planPriceCents } from "./payfast";
 
 // Fixed reference params used across signature tests. The expected hashes are
 // computed from the exact encoding rules PayFast documents (spaces -> "+",
@@ -13,7 +13,6 @@ const REF_PARAMS = {
   amount: "79.00",
   item_name: "Growth plan",
 };
-
 describe("buildSignature", () => {
   it("produces a stable MD5 without a passphrase", () => {
     expect(buildSignature(REF_PARAMS)).toBe("f6fdf755fa6b34fc9881a98f438d69dd");
@@ -55,19 +54,29 @@ describe("validSignature", () => {
 
 describe("validAmount", () => {
   it("accepts the exact plan price", () => {
-    expect(validAmount(PLAN_PRICES_ZAR.growth.toFixed(2), "growth")).toBe(true);
-    expect(validAmount(PLAN_PRICES_ZAR.pro, "pro")).toBe(true);
+    expect(validAmount(PLAN_PRICES_ZAR.starter.toFixed(2), PLAN_PRICES_ZAR.starter)).toBe(true);
+    expect(validAmount(PLAN_PRICES_ZAR.growth, PLAN_PRICES_ZAR.growth)).toBe(true);
+    expect(validAmount(PLAN_PRICES_ZAR.pro.toFixed(2), PLAN_PRICES_ZAR.pro)).toBe(true);
   });
 
   it("rejects a mismatched amount", () => {
-    expect(validAmount("1.00", "growth")).toBe(false);
+    expect(validAmount("1.00", PLAN_PRICES_ZAR.growth)).toBe(false);
   });
 
-  it("rejects the non-paid starter tier", () => {
-    expect(validAmount("0.00", "starter")).toBe(false);
+  it("accepts R0.00 only for a trial setup", () => {
+    expect(validAmount("0.00", PLAN_PRICES_ZAR.starter, { isTrialSetup: true })).toBe(true);
+    expect(validAmount("0.00", PLAN_PRICES_ZAR.starter)).toBe(false);
   });
 
   it("rejects a non-numeric amount", () => {
-    expect(validAmount("abc", "pro")).toBe(false);
+    expect(validAmount("abc", PLAN_PRICES_ZAR.pro)).toBe(false);
+  });
+});
+
+describe("planPriceCents", () => {
+  it("converts ZAR prices to cents for the PayFast API", () => {
+    expect(planPriceCents("starter")).toBe(350000);
+    expect(planPriceCents("growth")).toBe(500000);
+    expect(planPriceCents("pro")).toBe(700000);
   });
 });

@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { useSubscription } from "@/contexts/SubscriptionContext";
+import { limitViolation } from "@/lib/limits";
 import type {
   Alert,
   Appointment,
@@ -401,13 +402,21 @@ export function usePracticeData() {
 }
 
 export function usePracticeMutations() {
-  const { organisation, membership } = useSubscription();
+  const { organisation, membership, tier, pendingTier } = useSubscription();
   const queryClient = useQueryClient();
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["practice-data", organisation?.id] });
 
   const addPatients = useMutation({
     mutationFn: async (patients: Patient[]) => {
       const { organisationId, userId } = requireOrganisation(organisation?.id, membership?.user_id);
+      // Fail fast with a clear message before a bulk insert bounces off the
+      // enforce_tier_limits trigger. The trigger remains the source of truth.
+      const { count } = await supabase
+        .from("patients")
+        .select("id", { count: "exact", head: true })
+        .eq("organisation_id", organisationId);
+      const violation = limitViolation("patients", count ?? 0, tier, pendingTier);
+      if (violation) throw new Error(violation);
       const rows = patients.map((patient) => ({
         organisation_id: organisationId,
         user_id: userId,
@@ -578,6 +587,15 @@ export function usePracticeMutations() {
   const addAutomationRule = useMutation({
     mutationFn: async (rule: AutomationRule) => {
       const { organisationId } = requireOrganisation(organisation?.id, membership?.user_id);
+      if (rule.active) {
+        const { count } = await supabase
+          .from("automation_rules")
+          .select("id", { count: "exact", head: true })
+          .eq("organisation_id", organisationId)
+          .eq("active", true);
+        const violation = limitViolation("automations", count ?? 0, tier, pendingTier);
+        if (violation) throw new Error(violation);
+      }
       const { error } = await supabase.from("automation_rules").insert({
         organisation_id: organisationId,
         name: rule.name,

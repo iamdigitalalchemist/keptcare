@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Bot, Clock, Mail, MessageSquare, Smartphone, Users, Plus } from "lucide-react";
 import { AddAutomationDialog } from "@/components/AddAutomationDialog";
+import { FeatureGate } from "@/components/FeatureGate";
 import { formatDate } from "@/lib/utils";
 import { usePracticeData, usePracticeMutations } from "@/lib/practice-data";
 
@@ -35,7 +36,8 @@ export default function Automations() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <FeatureGate feature="automation">
+      <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="page-header">Automations</h1>
@@ -83,6 +85,7 @@ export default function Automations() {
           </Card>
         ))}
       </div>
-    </div>
+      </div>
+    </FeatureGate>
   );
 }

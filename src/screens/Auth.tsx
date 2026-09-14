@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
+import { startPayFastCheckout } from "@/lib/start-checkout";
 
 export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
@@ -31,7 +32,7 @@ export default function AuthPage() {
         router.push(inviteToken ? `/accept-invite?token=${encodeURIComponent(inviteToken)}` : "/dashboard");
       }
     } else {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -46,6 +47,15 @@ export default function AuthPage() {
       });
       if (error) {
         toast.error(error.message);
+      } else if (!inviteToken && data.session) {
+        // Organisation was created synchronously by handle_new_user, so we can
+        // capture the card right away: R0 today (Starter trial), first charge
+        // on day 14. If email confirmation is enabled there is no session yet
+        // — after confirming, the card-capture gate on ProtectedRoute forces
+        // checkout before the dashboard opens.
+        const checkoutError = await startPayFastCheckout("starter");
+        if (checkoutError) toast.error(checkoutError);
+        else toast.success("Confirm your details with PayFast to start your trial.");
       } else {
         toast.success("Check your email to confirm your account.");
       }
@@ -77,7 +87,9 @@ export default function AuthPage() {
           <CardDescription>
             {isLogin
               ? "Sign in to your KeptCare account"
-              : "Start your 14-day free trial — no credit card required"}
+              : inviteToken
+                ? "Create your account to join the organisation"
+                : "14-day free trial on Starter — add your card to begin. R0 charged today, R3,500/month from day 14. Cancel anytime."}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -129,7 +141,13 @@ export default function AuthPage() {
               />
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Please wait…" : isLogin ? "Sign In" : inviteToken ? "Create Account" : "Start Free Trial"}
+              {loading
+                ? "Please wait…"
+                : isLogin
+                  ? "Sign In"
+                  : inviteToken
+                    ? "Create Account"
+                    : "Start Free Trial & Add Card"}
             </Button>
           </form>
           <div className="mt-4 text-center text-sm text-muted-foreground">

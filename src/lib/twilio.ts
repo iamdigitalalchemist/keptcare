@@ -1,4 +1,7 @@
 import crypto from "crypto";
+import { renderTemplate } from "@/lib/render-template";
+
+export { renderTemplate };
 
 // Twilio SMS integration helpers.
 //
@@ -53,16 +56,6 @@ export function normalizePhone(raw: string, defaultDialCode = "+27"): string | n
 
   // E.164: "+" then 8–15 digits, no leading zero after the dial code.
   return /^\+[1-9]\d{7,14}$/.test(e164) ? e164 : null;
-}
-
-/**
- * Render a message template body by substituting {{variable}} placeholders.
- * Unknown placeholders are left intact so missing data is visible, not silent.
- */
-export function renderTemplate(body: string, variables: Record<string, string>): string {
-  return body.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (match, name: string) =>
-    Object.prototype.hasOwnProperty.call(variables, name) ? variables[name] : match,
-  );
 }
 
 /**

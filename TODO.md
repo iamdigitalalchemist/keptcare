@@ -10,10 +10,15 @@
 
 ## SMS (Twilio)
 - [ ] Add Twilio env vars to Vercel Production (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_MESSAGING_SERVICE_SID` or `TWILIO_FROM_NUMBER`) — see `docs/twilio.md`. SID/token are in local `.env`; a sender still needs to be chosen.
-- [ ] Wire a "Send SMS" action in the UI (e.g. PatientDetail) to `POST /api/sms/send`
+- [x] Wire a "Send SMS" action in the UI (e.g. PatientDetail) to `POST /api/sms/send` — Send SMS button on PatientDetail opens `SendSmsDialog` (free-form or SMS template with live preview, consent/phone gating)
 
 ## Done
 - [x] Twilio migration applied to local + hosted DB
 - [x] PayFast migrations applied to local + hosted DB
+- [x] Tier-limits migration (`20260912000000`) pushed to hosted DB — it had been missed; `enforce_tier_limits` is now live in production
+- [x] `subscription_active` default-false migration (`20260914000000`) applied to hosted DB
 - [x] Vercel prod env fixed (Supabase URL/key were empty) + PayFast sandbox creds
 - [x] Subscription expiry enforcement (`subscription_period_end` + 3-day grace)
+- [x] Mandatory card-capture gate (ProtectedRoute) — no app access without a `payfast_token`; `TrialCardBanner` removed
+- [x] Mid-trial upgrade to Growth/Pro bills immediately (cancel trial sub + re-checkout); ITN creation amount check validates checkout tier
+- [x] Send SMS action on PatientDetail (`SendSmsDialog` → `POST /api/sms/send`)

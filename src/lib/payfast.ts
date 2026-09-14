@@ -2,17 +2,22 @@ import crypto from "crypto";
 
 // PayFast integration helpers.
 //
-// PayFast processes in ZAR only. The amounts below are PLACEHOLDERS mirroring the
-// GBP numbers shown on the pricing page (R29 / R79 / R149). Replace them with real
-// ZAR prices before going live — the ITN webhook validates the paid amount against
-// these values, so they must match exactly what the checkout charges.
+// PayFast processes in ZAR. Prices are the ones shown on the public home page:
+// Starter R3,500 / Growth R5,000 / Pro R7,000 per month. The ITN webhook
+// validates paid amounts against these values, so they must match exactly what
+// the checkout charges.
 export type Tier = "starter" | "growth" | "pro";
 
-export const PLAN_PRICES_ZAR: Record<Exclude<Tier, "starter">, number> = {
-  // TODO(pricing): replace placeholder ZAR amounts with real prices.
-  growth: 79.0,
-  pro: 149.0,
+export const PLAN_PRICES_ZAR: Record<Tier, number> = {
+  starter: 3500.0,
+  growth: 5000.0,
+  pro: 7000.0,
 };
+
+/** Monthly price in cents, as required by the PayFast subscription API. */
+export function planPriceCents(tier: Tier): number {
+  return Math.round(PLAN_PRICES_ZAR[tier] * 100);
+}
 
 export const PLAN_NAMES: Record<Tier, string> = {
   starter: "Starter",
@@ -146,15 +151,26 @@ export async function validServerConfirmation(
 }
 
 /**
- * Check the gross amount PayFast reports matches the expected price for the tier,
- * to the cent. Guards against a tampered checkout amount.
+ * Check the gross amount PayFast reports matches the expected price, to the
+ * cent. Guards against a tampered checkout amount.
+ *
+ * Two legitimate shapes:
+ * - `isTrialSetup`: the initial R0.00 charge when a subscription is created
+ *   for a trial org (card captured now, first real charge on day 14).
+ * - otherwise the paid amount must equal `expectedZar` — the price of whatever
+ *   tier the subscription is currently scheduled to bill (current tier for
+ *   upgrades, pending tier for downgrades), not necessarily the tier the
+ *   checkout was originally created with.
  */
-export function validAmount(amountGross: string | number, tier: Tier): boolean {
-  if (tier === "starter") return false; // starter is not a paid recurring plan here
-  const expected = PLAN_PRICES_ZAR[tier];
+export function validAmount(
+  amountGross: string | number,
+  expectedZar: number,
+  opts: { isTrialSetup?: boolean } = {},
+): boolean {
   const paid = typeof amountGross === "string" ? parseFloat(amountGross) : amountGross;
   if (!Number.isFinite(paid)) return false;
-  return Math.abs(paid - expected) < 0.01;
+  if (opts.isTrialSetup) return Math.abs(paid) < 0.01;
+  return Math.abs(paid - expectedZar) < 0.01;
 }
 
 // --- PayFast subscription-management API (for cancelling a token) ---
