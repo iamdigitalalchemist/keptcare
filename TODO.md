@@ -6,7 +6,8 @@
 - [ ] PayFast go-live env swap on Vercel (live merchant id/key/passphrase, `PAYFAST_SANDBOX=false`) — see "Go-live checklist" in `docs/payfast.md`
 
 ## Security criticals (fixed on branch `fix/security-criticals`, 2026-10-12)
-- [ ] **Push migration `20261012000000_security_hardening.sql` to prod** — dry-run verified against prod in a rolled-back transaction (18/18 exploit checks pass). Deploy the app code at the same time.
+- [x] Migration `20261012000000_security_hardening.sql` applied to prod (2026-10-12) and verified (grants, policies, functions, triggers; platform admins intact)
+- [ ] Merge `fix/security-criticals` (includes `fix/payfast-signatures`) to `main` after a sandbox checkout passes on the preview
 - [x] Platform-admin self-grant via user metadata → app metadata only
 - [x] Billing columns not writable from the browser (column grants)
 - [x] Manager → admin escalation (members/invitations read-only from browser, role checks in RPCs, same-org roles only, no platform.* perms)
