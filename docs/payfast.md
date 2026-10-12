@@ -57,9 +57,9 @@ webhook — `/api/payfast/notify` is the single writer of billing state.
    ≈ 0`, no existing token → creation).
 5. The ITN marks the org active, sets `subscription_period_end =
    trial_ends_at + 1 month` (bridging trial → paid seamlessly), stores the
-   token, and calls PayFast's subscription API (`PUT /subscriptions/{token}`
-   with `next_run = trial_ends_at`) so the **first real charge lands on day
-   14** and recurs monthly on that date.
+   token, and calls PayFast's subscription API
+   (`PATCH /subscriptions/{token}/update` with `run_date = trial_ends_at`) so
+   the **first real charge lands on day 14** and recurs monthly on that date.
 6. Browser lands on `/pricing/success`.
 
 If email confirmation is on there is no session at signup: after confirming
@@ -103,7 +103,7 @@ cancelled for a mid-trial move to a paid tier):
 ### 3. Mid-trial move to Growth/Pro **with** a card on file
 
 This is the "no free days on paid tiers" path. A trial user who captured
-their card has a token whose `next_run` is the trial end date — a plain
+their card has a token whose next run date is the trial end date — a plain
 amount change would take effect then, handing out free days. So
 `POST /api/payfast/change` instead:
 
@@ -121,7 +121,7 @@ checkout".)
 
 `POST /api/payfast/change`:
 
-1. `PUT /subscriptions/{token}` with the new `amount` (cents) — PayFast
+1. `PATCH /subscriptions/{token}/update` with the new `amount` (cents) — PayFast
    applies it at the next scheduled run (**no proration**; that's PayFast's
    model, and matches the pricing copy).
 2. `subscription_tier` updates **immediately** (features switch now),
@@ -129,7 +129,7 @@ checkout".)
 
 ### 5. Downgrade
 
-1. Same PayFast amount `PUT` (bills the lower price from the next run).
+1. Same PayFast amount `PATCH` (bills the lower price from the next run).
 2. `pending_tier` is set; **features stay on the current tier** until the
    renewal ITN applies it.
 3. That ITN flips `subscription_tier`, clears `pending_tier`, extends the
@@ -165,7 +165,8 @@ gateway, token cleared locally. Access continues until
 
 Every notification passes **four checks** before it can change state:
 
-1. **Signature** — MD5 over the posted fields + passphrase, timing-safe compare.
+1. **Signature** — MD5 over **every** posted field in received order (blank
+   fields included, untrimmed) + passphrase, timing-safe compare.
 2. **Source IP** — must resolve to a known PayFast host (cached DNS, 10 min TTL).
 3. **Server postback** — payload POSTed back to PayFast `/eng/query/validate`
    must return `VALID`.
@@ -180,10 +181,26 @@ apply once (unique violation = already processed).
 
 | payment_status | Effect |
 | --- | --- |
-| `COMPLETE` + no token | **Creation:** activate org, set `subscription_tier` = checkout tier, `subscription_period_end` = (trial end + 1 month) for the R0 Starter trial setup, else now + 1 month; store token; anchor `next_run` for trial setups |
+| `COMPLETE` + no token | **Creation:** activate org, set `subscription_tier` = checkout tier, `subscription_period_end` = (trial end + 1 month) for the R0 Starter trial setup, else now + 1 month; store token; anchor `run_date` for trial setups |
 | `COMPLETE` + token | **Renewal:** extend `subscription_period_end` +1 month from the previous end; apply `pending_tier` if set (with `pause_excess_automations`) |
 | `CANCELLED` | Clear `payfast_token`; access continues until `subscription_period_end`, then lapses with 3-day grace |
 | anything else (`FAILED`, `PENDING`, …) | Recorded in `payfast_payments` audit log only; a failed renewal simply lets the period lapse |
+
+## Signatures (three different rules)
+
+PayFast uses a different MD5 recipe per surface. Mixing them up produces
+"signature mismatch" errors even with correct credentials.
+
+| Surface | Field order | Blank values | Passphrase |
+| --- | --- | --- | --- |
+| Checkout form (`buildSignature`) | PayFast's **documented attribute order** (`CHECKOUT_FIELD_ORDER`), not post order | Skipped; values trimmed | Appended last; **required** for subscriptions |
+| ITN (`validSignature`) | Order received, up to `signature` | **Included** | Appended last |
+| Subscription API (`buildApiSignature`) | Alphabetical over headers (`merchant-id`, `version`, `timestamp`) + body fields + `passphrase` | n/a | Sorted in as a field |
+
+All three encode like PHP `urlencode` (spaces → `+`, uppercase hex, `~ ! ' ( ) *`
+encoded). The passphrase must match the one set on the **same** PayFast
+account (sandbox and live have separate passphrases), and `PAYFAST_SANDBOX`
+must match which account the merchant id/key belong to.
 
 ## Audit log
 
@@ -212,7 +229,7 @@ See `.env.example`. Required: `PAYFAST_MERCHANT_ID`, `PAYFAST_MERCHANT_KEY`,
    `subscription_tier`, and a row in `payfast_payments`.
 
 Test cards and sandbox behaviour: <https://developers.payfast.co.za/docs#sandbox>.
-Subscription API reference (amounts in **cents**, `next_run` as `YYYY-MM-DD`):
+Subscription API reference (amounts in **cents**, `run_date` as `YYYY-MM-DD`):
 <https://developers.payfast.co.za/api-docs/subscriptions>.
 
 ## Go-live checklist (sandbox → live)

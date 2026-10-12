@@ -54,7 +54,7 @@ export async function POST(req: Request) {
 
   // Mid-trial move to a paid tier. The free trial (and its R0 subscription)
   // only ever applies to Starter; Growth/Pro must bill in full from day one.
-  // A PUT amount change only takes effect at next_run — the trial end date —
+  // A PATCH amount change only takes effect at the next run — the trial end date —
   // which would hand out free days on a paid tier. Cancel the trial
   // subscription instead and have the client run a fresh full-price checkout,
   // which charges immediately. The client's 409 handler does exactly that.

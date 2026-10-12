@@ -44,7 +44,9 @@ export async function POST(req: Request) {
   const merchantKey = process.env.PAYFAST_MERCHANT_KEY;
   const passphrase = process.env.PAYFAST_PASSPHRASE;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
-  if (!merchantId || !merchantKey || !appUrl) {
+  // PayFast rejects subscription checkouts that aren't signed with a
+  // passphrase, so treat a missing one as misconfiguration.
+  if (!merchantId || !merchantKey || !passphrase || !appUrl) {
     return NextResponse.json({ error: "Billing is not configured" }, { status: 500 });
   }
 
@@ -66,7 +68,9 @@ export async function POST(req: Request) {
   // Our own reference. PayFast echoes m_payment_id back on the ITN.
   const mPaymentId = `${authed.organisationId}:${tier}`;
 
-  // Field order matters for the signature: PayFast signs fields in the order sent.
+  // Listed in PayFast's documented attribute order. buildSignature signs in
+  // that order (CHECKOUT_FIELD_ORDER) whatever the object order is; keeping
+  // the posted order the same just makes the form easy to compare.
   const fields: Record<string, string> = {
     merchant_id: merchantId,
     merchant_key: merchantKey,
@@ -76,15 +80,15 @@ export async function POST(req: Request) {
     m_payment_id: mPaymentId,
     amount,
     item_name: `KeptCare ${PLAN_NAMES[tier]} plan`,
+    // Custom fields echoed back on the ITN so we can attribute the payment.
+    custom_str1: authed.organisationId,
+    custom_str2: tier,
     // Recurring subscription configuration. billing_date is omitted entirely —
-    // the ITN webhook sets next_run to the trial end date for trial signups.
+    // the ITN webhook sets run_date to the trial end date for trial signups.
     subscription_type: "1",
     recurring_amount: price,
     frequency: "3", // 3 = monthly
     cycles: "0", // 0 = indefinite until cancelled
-    // Custom fields echoed back on the ITN so we can attribute the payment.
-    custom_str1: authed.organisationId,
-    custom_str2: tier,
   };
 
   fields.signature = buildSignature(fields, passphrase);
