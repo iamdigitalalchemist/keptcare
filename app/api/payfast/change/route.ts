@@ -83,8 +83,13 @@ export async function POST(req: Request) {
     );
   }
 
-  const currentTier = (org.pending_tier ?? org.subscription_tier) as Tier;
-  if (currentTier === tier) {
+  // Features run on subscription_tier; pending_tier is only what the next
+  // charge will switch to. Compare against the ACTIVE tier — comparing against
+  // the scheduled one turned "Pro with a pending Starter downgrade → Growth"
+  // into an "upgrade" that dropped Pro features immediately.
+  const activeTier = org.subscription_tier as Tier;
+  const scheduledTier = (org.pending_tier ?? activeTier) as Tier;
+  if (tier === scheduledTier) {
     return NextResponse.json({ error: "Already on that plan" }, { status: 400 });
   }
 
@@ -93,10 +98,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Could not update the subscription at the gateway" }, { status: 502 });
   }
 
-  const isUpgrade = TIER_ORDER[tier] > TIER_ORDER[currentTier];
+  // Upgrade: switch features now. Back to the active tier: cancel the pending
+  // downgrade. Lower than active: schedule the downgrade for the period end.
+  const isUpgrade = TIER_ORDER[tier] > TIER_ORDER[activeTier];
+  const cancelledDowngrade = tier === activeTier;
   const update: { subscription_tier?: Tier; pending_tier?: Tier | null } = isUpgrade
     ? { subscription_tier: tier, pending_tier: null }
-    : { pending_tier: tier };
+    : cancelledDowngrade
+      ? { pending_tier: null }
+      : { pending_tier: tier };
   const { error: updErr } = await supabaseAdmin
     .from("organisations")
     .update(update)
@@ -110,6 +120,7 @@ export async function POST(req: Request) {
     ok: true,
     effectiveAt: org.subscription_period_end ?? null,
     isUpgrade,
+    cancelledDowngrade,
     newAmountZar: PLAN_PRICES_ZAR[tier],
   });
 }

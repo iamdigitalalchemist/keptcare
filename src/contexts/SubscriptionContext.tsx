@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./AuthContext";
 import { TIER_LIMITS, type TierLimit } from "@/lib/limits";
+import { canSendSms as orgCanSendSms, hasPaidAccess } from "@/lib/access";
 
 type Tier = "starter" | "growth" | "pro";
 
@@ -57,6 +58,8 @@ interface SubscriptionContextType {
   limits: TierLimit;
   /** Downgrade scheduled to take effect at the next billing date, if any. */
   pendingTier: Tier | null;
+  /** Whether the org may send SMS (paid Growth/Pro; never Starter or the trial). */
+  canSendSms: boolean;
   refreshSubscription: () => Promise<void>;
   refreshOrganisationAuth: () => Promise<void>;
 }
@@ -93,6 +96,7 @@ const SubscriptionContext = createContext<SubscriptionContextType>({
   patientLimit: TIER_LIMITS.starter.patients,
   limits: TIER_LIMITS.starter,
   pendingTier: null,
+  canSendSms: false,
   refreshSubscription: async () => {},
   refreshOrganisationAuth: async () => {},
 });
@@ -159,23 +163,29 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     }
 
     setLoading(false);
-  }, [user]);
+    // Keyed on the user id: the user object is replaced on every hourly token
+    // refresh, which used to refetch and flash ProtectedRoute's loading screen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   useEffect(() => {
     fetchSubscription();
   }, [fetchSubscription]);
 
   const isTrialActive = trialEndsAt ? new Date() < trialEndsAt : false;
-  // Paid access lapses at subscription_period_end, set by the PayFast ITN on
-  // each successful charge (and left in place on cancellation so the org keeps
-  // what it paid for). The 3-day grace absorbs late renewal notifications.
-  // A NULL period end means the org has never successfully paid — that is NOT
-  // active access (org rows default subscription_active to FALSE for this
-  // reason); the trial above is what carries new orgs.
-  const PERIOD_END_GRACE_MS = 3 * 24 * 60 * 60 * 1000;
-  const isPaidActive =
-    subscriptionActive && !!periodEnd && Date.now() < periodEnd.getTime() + PERIOD_END_GRACE_MS;
+  // Paid access lapses at subscription_period_end (+3-day grace), set by the
+  // PayFast ITN on each successful charge. A NULL period end means the org has
+  // never successfully paid; the trial is what carries new orgs. Rules live in
+  // src/lib/access.ts, shared with the server.
+  const isPaidActive = hasPaidAccess({
+    subscription_tier: tier,
+    subscription_active: subscriptionActive,
+    subscription_period_end: periodEnd?.toISOString() ?? null,
+    trial_ends_at: trialEndsAt?.toISOString() ?? null,
+  });
   const isSubscriptionActive = isPaidActive || isTrialActive;
+  // Mirrors the /api/sms/send gate: paid Growth/Pro only, never the trial.
+  const canSendSms = !!organisation && orgCanSendSms(organisation);
   const isOrgAdmin = membership?.role?.key === "org_admin";
   const isAdmin = isPlatformAdmin;
 
@@ -209,6 +219,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         patientLimit: TIER_LIMITS[tier].patients,
         limits: TIER_LIMITS[tier],
         pendingTier: (organisation?.pending_tier as Tier | null) ?? null,
+        canSendSms,
         refreshSubscription: fetchSubscription,
         refreshOrganisationAuth: fetchSubscription,
       }}

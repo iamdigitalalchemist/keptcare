@@ -76,8 +76,17 @@ supabase/migrations/      Schema, RLS, RPCs, triggers (source of truth for the D
   - `manager`: operations, users, and org settings, but no billing or roles
   - `staff`
   - `viewer`
-- **Platform admins** (`platform_admins` table) pass every
-  `has_org_permission` check and get the `/admin` screens.
+- **Platform admins** (`platform_admins` table, or `is_super_admin: "true"`
+  in a user's **app** metadata, which only the service role can set) pass
+  every `has_org_permission` check and get the `/admin` screens. User
+  metadata is user-writable and never grants privileges.
+- **Write paths:** the browser may only update an org's practice details
+  (`name`, `email`, `logo_url`, `phone`, `website`, via column grants).
+  Billing columns are written only by the ITN (service role) and the
+  platform-admin RPCs. Memberships and invitations are read-only from the
+  browser; all changes go through SECURITY DEFINER RPCs, which check that a
+  role belongs to the org and that only org admins hand out `org_admin`.
+  Permission checks only honour a role from the member's own org.
 - `get_current_auth_context()` returns the profile, org, membership, role,
   permissions, and platform-admin flag in a single RPC. It feeds
   `SubscriptionContext`.
@@ -87,7 +96,8 @@ supabase/migrations/      Schema, RLS, RPCs, triggers (source of truth for the D
 - **Tiers and prices:** `PLAN_PRICES_ZAR` holds Starter R3,500, Growth R5,000,
   and Pro R7,000. Limits live in `TIER_LIMITS` and in the
   `tier_limit()`/`enforce_tier_limits()` SQL. Both copies must stay in sync.
-- **Access rules** (client side, `SubscriptionContext` + `ProtectedRoute`):
+- **Access rules** (`src/lib/access.ts`, shared by `SubscriptionContext`,
+  `ProtectedRoute`, and server routes):
   - **Card gate:** the user must have a `payfast_token`, or paid access that
     hasn't run out.
   - **Subscription gate:** the trial must still be running, or
@@ -119,7 +129,7 @@ permissions, and has an `updated_at` trigger.
 | Patients, appointments, CSV import | Working CRUD |
 | Roles, invites, org settings | Working. Invite links are copied to the clipboard, not emailed |
 | Billing (PayFast) | Working in sandbox |
-| One-off SMS from patient detail | Working (needs Twilio env in prod) |
+| One-off SMS from patient detail | Working (needs Twilio env in prod). Paid Growth/Pro only (never Starter or the trial), requires `communications.write`, 500 per org per 24h |
 | Automations, campaigns | **Stored only.** Nothing runs them yet: no cron or worker, and `patients_affected`/`last_triggered` are just data |
 | Email, WhatsApp channels | Not implemented (no provider) |
 | Loyalty, referrals, segments, alerts | CRUD and display. Points and alerts are not computed automatically |

@@ -59,6 +59,16 @@ export async function POST(req: Request) {
     .select("payfast_token, trial_ends_at")
     .eq("id", authed.organisationId)
     .maybeSingle();
+  // One live subscription per org. A second checkout (double click, stale tab)
+  // would create a parallel PayFast subscription and bill twice; plan changes
+  // on an existing subscription go through /api/payfast/change.
+  if (org?.payfast_token) {
+    return NextResponse.json(
+      { error: "A subscription is already active — change plans from the pricing page instead" },
+      { status: 409 },
+    );
+  }
+
   const trialEndsAt = org?.trial_ends_at ? new Date(org.trial_ends_at) : null;
   const trialApplies = !org?.payfast_token && !!trialEndsAt && trialEndsAt > new Date() && tier === "starter";
 

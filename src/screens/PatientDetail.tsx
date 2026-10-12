@@ -49,7 +49,7 @@ export default function PatientDetail() {
   const { id } = useParams();
   const router = useRouter();
   const { data, isLoading, organisationId } = usePracticeData();
-  const { organisation } = useSubscription();
+  const { organisation, canSendSms } = useSubscription();
   const { updatePatient, deletePatient } = usePracticeMutations();
   const [editOpen, setEditOpen] = useState(false);
   const [smsOpen, setSmsOpen] = useState(false);
@@ -121,8 +121,16 @@ export default function PatientDetail() {
                       variant="outline"
                       size="sm"
                       className="h-7"
-                      disabled={!patient.consentSms || !patient.phone}
-                      title={!patient.consentSms ? "Patient has not consented to SMS" : !patient.phone ? "No phone number on file" : undefined}
+                      disabled={!canSendSms || !patient.consentSms || !patient.phone}
+                      title={
+                        !canSendSms
+                          ? "SMS is available on the paid Growth and Pro plans"
+                          : !patient.consentSms
+                            ? "Patient has not consented to SMS"
+                            : !patient.phone
+                              ? "No phone number on file"
+                              : undefined
+                      }
                       onClick={() => setSmsOpen(true)}
                     >
                       <MessageSquare className="h-3.5 w-3.5 mr-1" /> Send SMS

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthedOrg } from "@/lib/api-auth";
 import { supabaseAdmin } from "@/integrations/supabase/admin";
+import { canSendSms } from "@/lib/access";
 import {
   getTwilioConfig,
   mapTwilioStatus,
@@ -12,6 +13,10 @@ import {
 
 export const runtime = "nodejs";
 
+// Abuse guard against runaway Twilio spend (a leaked session, a buggy client
+// loop). Not a pricing limit — raise it if a practice legitimately needs more.
+const DAILY_SMS_CAP = 500;
+
 // POST /api/sms/send
 // Body: { patientId: string } plus either
 //   { message: string }                                — free-form SMS, or
@@ -20,6 +25,10 @@ export const runtime = "nodejs";
 //   filled in automatically and can be overridden via `variables`.
 // Sends via Twilio and records the attempt in communication_logs. Delivery
 // updates arrive later on /api/sms/status.
+//
+// Gates: the caller needs communications.write, and the org must be on a paid
+// tier that includes SMS (Growth/Pro) — Starter and the free trial never send
+// SMS. A per-org daily cap guards against runaway spend.
 export async function POST(req: Request) {
   const authed = await getAuthedOrg(req);
   if (!authed) {
@@ -42,6 +51,44 @@ export async function POST(req: Request) {
     return NextResponse.json(
       { error: "patientId and either message or templateId are required" },
       { status: 400 },
+    );
+  }
+
+  const [permissionRes, orgRes, sentTodayRes] = await Promise.all([
+    supabaseAdmin.rpc("has_org_permission", {
+      _organisation_id: authed.organisationId,
+      _permission_key: "communications.write",
+      _user_id: authed.userId,
+    }),
+    supabaseAdmin
+      .from("organisations")
+      .select("subscription_tier, subscription_active, subscription_period_end, trial_ends_at, status")
+      .eq("id", authed.organisationId)
+      .maybeSingle(),
+    supabaseAdmin
+      .from("communication_logs")
+      .select("id", { count: "exact", head: true })
+      .eq("organisation_id", authed.organisationId)
+      .eq("channel", "sms")
+      .gte("sent_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()),
+  ]);
+
+  if (permissionRes.error || permissionRes.data !== true) {
+    return NextResponse.json({ error: "You don't have permission to send messages" }, { status: 403 });
+  }
+  if (orgRes.error || !orgRes.data) {
+    return NextResponse.json({ error: "Organisation not found" }, { status: 404 });
+  }
+  if (!canSendSms(orgRes.data)) {
+    return NextResponse.json(
+      { error: "SMS is available on the paid Growth and Pro plans. Upgrade to send SMS." },
+      { status: 403 },
+    );
+  }
+  if (sentTodayRes.error || (sentTodayRes.count ?? 0) >= DAILY_SMS_CAP) {
+    return NextResponse.json(
+      { error: `Daily SMS limit reached (${DAILY_SMS_CAP} per 24 hours). Try again later.` },
+      { status: 429 },
     );
   }
 

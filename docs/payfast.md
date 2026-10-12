@@ -56,8 +56,9 @@ webhook — `/api/payfast/notify` is the single writer of billing state.
 4. PayFast charges R0.00 and hits the ITN webhook (`COMPLETE`, `amount_gross
    ≈ 0`, no existing token → creation).
 5. The ITN marks the org active, sets `subscription_period_end =
-   trial_ends_at + 1 month` (bridging trial → paid seamlessly), stores the
-   token, and calls PayFast's subscription API
+   trial_ends_at` (nothing has been charged yet — the day-14 renewal ITN
+   extends it a month; if that charge fails, access lapses after the 3-day
+   grace), stores the token, and calls PayFast's subscription API
    (`PATCH /subscriptions/{token}/update` with `run_date = trial_ends_at`) so
    the **first real charge lands on day 14** and recurs monthly on that date.
 6. Browser lands on `/pricing/success`.
@@ -86,6 +87,10 @@ On the gate screen the admin can either start the R0 Starter checkout directly
 ("Add card — R0 today" while the trial is running; "Subscribe with card"
 after it lapsed, which bills immediately) or jump to `/pricing` to pick a
 plan.
+
+Checkout returns **409** if the org already has a `payfast_token`: one live
+subscription per org (a second checkout would bill twice). Plan changes on an
+existing subscription go through `/api/payfast/change`.
 
 ### 2. Subscribing during the trial without a card
 
@@ -131,7 +136,10 @@ checkout".)
 
 1. Same PayFast amount `PATCH` (bills the lower price from the next run).
 2. `pending_tier` is set; **features stay on the current tier** until the
-   renewal ITN applies it.
+   renewal ITN applies it. Choosing the current tier again before then
+   cancels the pending downgrade (amount restored). Plan changes always
+   compare against `subscription_tier` (what features run on), never the
+   pending tier.
 3. That ITN flips `subscription_tier`, clears `pending_tier`, extends the
    period one month from the previous period end, and calls
    `pause_excess_automations(org, new_tier)` — the newest active automation
@@ -181,9 +189,10 @@ apply once (unique violation = already processed).
 
 | payment_status | Effect |
 | --- | --- |
-| `COMPLETE` + no token | **Creation:** activate org, set `subscription_tier` = checkout tier, `subscription_period_end` = (trial end + 1 month) for the R0 Starter trial setup, else now + 1 month; store token; anchor `run_date` for trial setups |
+| `COMPLETE` + no token | **Creation:** activate org, set `subscription_tier` = checkout tier, `subscription_period_end` = trial end for the R0 Starter trial setup, else now + 1 month; store token; anchor `run_date` for trial setups |
 | `COMPLETE` + token | **Renewal:** extend `subscription_period_end` +1 month from the previous end; apply `pending_tier` if set (with `pause_excess_automations`) |
-| `CANCELLED` | Clear `payfast_token`; access continues until `subscription_period_end`, then lapses with 3-day grace |
+| `CANCELLED` (current token) | Clear `payfast_token`; access continues until `subscription_period_end`, then lapses with 3-day grace |
+| any status for a **different** token than the org's current one | Recorded in the audit log only — e.g. the R0 trial subscription's CANCELLED ITN arriving after a mid-trial upgrade created its replacement |
 | anything else (`FAILED`, `PENDING`, …) | Recorded in `payfast_payments` audit log only; a failed renewal simply lets the period lapse |
 
 ## Signatures (three different rules)

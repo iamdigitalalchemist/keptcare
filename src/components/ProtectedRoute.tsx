@@ -8,6 +8,7 @@ import { useSubscription } from "@/contexts/SubscriptionContext";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { startPayFastCheckout } from "@/lib/start-checkout";
+import { hasPaidAccess } from "@/lib/access";
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading: authLoading } = useAuth();
@@ -65,14 +66,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   // and later cancelled: they keep tokenless access for what they already
   // paid (period end + the same 3-day grace as SubscriptionContext), and only
   // hit this gate once that runs out.
-  const PERIOD_END_GRACE_MS = 3 * 24 * 60 * 60 * 1000;
-  const periodEnd = organisation?.subscription_period_end
-    ? new Date(organisation.subscription_period_end)
-    : null;
-  const paidAccess =
-    Boolean(organisation?.subscription_active) &&
-    !!periodEnd &&
-    Date.now() < periodEnd.getTime() + PERIOD_END_GRACE_MS;
+  const paidAccess = !!organisation && hasPaidAccess(organisation);
   const mustCaptureCard =
     Boolean(membership) && !isPlatformAdmin && !organisation?.payfast_token && !paidAccess;
 

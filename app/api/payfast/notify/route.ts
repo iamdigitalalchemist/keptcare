@@ -73,6 +73,10 @@ export async function POST(req: Request) {
     .maybeSingle();
 
   const isCreation = !org?.payfast_token && !!data.token;
+  // A notification for a subscription that is no longer the org's current one
+  // (e.g. the R0 trial subscription cancelled during a mid-trial upgrade, whose
+  // CANCELLED ITN can land after the replacement exists) must not touch state.
+  const isStaleToken = !!org?.payfast_token && !!data.token && data.token !== org.payfast_token;
   // What this payment should carry: a creation bills the tier chosen at
   // checkout (the DB row may still say "starter" for a first Growth/Pro
   // signup); a renewal bills whatever the subscription is scheduled at.
@@ -123,6 +127,14 @@ export async function POST(req: Request) {
     console.error("[payfast] failed to record payment", insertErr);
   }
 
+  if (isStaleToken) {
+    console.warn("[payfast] ITN for a superseded subscription token — recorded, not applied", {
+      organisationId,
+      paymentStatus,
+    });
+    return new NextResponse("OK", { status: 200 });
+  }
+
   if (paymentStatus === "COMPLETE") {
     const oneMonthFrom = (d: Date) => {
       const next = new Date(d);
@@ -131,9 +143,10 @@ export async function POST(req: Request) {
     };
 
     if (isCreation) {
-      // New subscription. For a trial signup the first real charge is anchored
-      // to the trial end; the paid period then runs trial_end → +1 month, so
-      // set period end accordingly to bridge trial → paid seamlessly.
+      // New subscription. For a trial signup nothing has been charged yet, so
+      // access only runs to the trial end; the first real charge (anchored to
+      // that date below) extends it by a month via the renewal branch. If that
+      // charge fails, access lapses after the usual 3-day grace.
       const trialEndsAt = org?.trial_ends_at ? new Date(org.trial_ends_at) : null;
       const isTrialSignup =
         checkoutTier === "starter" &&
@@ -141,7 +154,7 @@ export async function POST(req: Request) {
         !!trialEndsAt &&
         trialEndsAt > new Date();
       const periodEnd = isTrialSignup
-        ? oneMonthFrom(trialEndsAt)
+        ? trialEndsAt.toISOString()
         : oneMonthFrom(new Date());
 
       const { error } = await supabaseAdmin
@@ -187,13 +200,16 @@ export async function POST(req: Request) {
         .eq("id", organisationId);
       if (error) console.error("[payfast] failed to extend subscription", error);
     }
-  } else if (paymentStatus === "CANCELLED") {
-    // Subscription cancelled by PayFast — let it lapse. We keep access until the
-    // known period end (set at last successful charge); just clear the token.
+  } else if (paymentStatus === "CANCELLED" && org?.payfast_token && data.token === org.payfast_token) {
+    // The org's current subscription was cancelled at PayFast — let it lapse.
+    // Access continues until the known period end (set at the last successful
+    // charge); just clear the token. Cancellations of older tokens were
+    // filtered out above.
     const { error } = await supabaseAdmin
       .from("organisations")
       .update({ payfast_token: null })
-      .eq("id", organisationId);
+      .eq("id", organisationId)
+      .eq("payfast_token", data.token);
     if (error) console.error("[payfast] failed to record cancellation", error);
   }
 

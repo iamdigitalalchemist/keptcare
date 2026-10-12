@@ -5,13 +5,16 @@
 - [ ] Set real ZAR prices in `PLAN_PRICES_ZAR` (`src/lib/payfast.ts`) — ITN validates paid amounts against these
 - [ ] PayFast go-live env swap on Vercel (live merchant id/key/passphrase, `PAYFAST_SANDBOX=false`) — see "Go-live checklist" in `docs/payfast.md`
 
-## Security criticals (pinned 2026-10-12 — plan agreed, not started)
-Client talks to Supabase directly, so RLS/grants are the only enforcement.
-- [ ] **Billing self-grant:** `organisations` UPDATE policy lets org admins/managers set `subscription_tier`/`subscription_active`/`subscription_period_end`/`payfast_token` from the browser. Fix: `REVOKE INSERT, UPDATE, DELETE ON organisations FROM authenticated, anon; GRANT UPDATE (name, email, logo_url, phone, website) TO authenticated;` (only columns Settings.tsx writes; admin RPCs + ITN unaffected).
-- [ ] **Role escalation:** drop `FOR ALL` write policies on `organisation_members` and `organisation_invitations` (client only uses SECURITY DEFINER RPCs); validate `_role_id` belongs to the org in `create_organisation_invitation` / `add_organisation_member_by_email` / `accept_organisation_invitation`; only `roles.manage` holders may grant `org_admin`; `has_org_permission` must require `role.organisation_id = om.organisation_id`; block `platform.*` keys in `role_permissions`.
-- [ ] **`/api/sms/send` unguarded:** require `communications.write`, active access (shared helper with SubscriptionContext/ProtectedRoute), tier channel includes `sms`; per-org daily cap. Open question: block SMS on Starter trial, or give a small allowance?
-- [ ] Related: R0 trial setup sets `subscription_period_end = trial_end + 1 month` before any charge → ~6 weeks free if day-14 charge fails. Set it to `trial_ends_at` instead.
-- [ ] Verify locally (`supabase start`) by attempting each exploit as manager/admin; `supabase db push` only after sign-off. Check hosted DB for orgs whose `subscription_tier` doesn't match their latest `payfast_payments` row.
+## Security criticals (fixed on branch `fix/security-criticals`, 2026-10-12)
+- [ ] **Push migration `20261012000000_security_hardening.sql` to prod** — dry-run verified against prod in a rolled-back transaction (18/18 exploit checks pass). Deploy the app code at the same time.
+- [x] Platform-admin self-grant via user metadata → app metadata only
+- [x] Billing columns not writable from the browser (column grants)
+- [x] Manager → admin escalation (members/invitations read-only from browser, role checks in RPCs, same-org roles only, no platform.* perms)
+- [x] Tier caps also enforced on re-activation (automations, members)
+- [x] `/api/sms/send`: `communications.write`, paid Growth/Pro only (no Starter, no trial), 500/24h cap; UI button gated
+- [x] ITN: trial setup period end = trial end; superseded-token ITNs (incl. CANCELLED) recorded but not applied
+- [x] Checkout 409 when a subscription exists; plan change compares against the active tier (downgrade cancel supported)
+- [ ] Legacy prod rows: the 4 test orgs have `subscription_active = true` with no payment (old default). Harmless (no period end ⇒ no paid access) but worth resetting to false.
 
 ## Infrastructure
 - [ ] Set up custom domain on Vercel (then update `NEXT_PUBLIC_APP_URL` + Supabase auth URLs)
