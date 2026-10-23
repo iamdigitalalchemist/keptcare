@@ -185,8 +185,8 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   };
 
   const canAccess = (feature: Feature): boolean => {
-    if (!isSubscriptionActive) return false;
     if (isPlatformAdmin) return true;
+    if (!isSubscriptionActive) return false;
     return TIER_FEATURES[tier].includes(feature);
   };
 
