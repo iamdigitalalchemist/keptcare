@@ -27,7 +27,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Reveal } from "@/components/home/Reveal";
-import { AuthCta, NavSignIn, PlanCta } from "@/components/home/HomeCtas";
+import { AuthCta, NavBookDemo, NavSignIn, PlanCta } from "@/components/home/HomeCtas";
 
 // Server component: all copy and layout render as static HTML. The only client
 // JS on this page is the Reveal scroll wrapper and the auth-aware CTAs.
@@ -354,7 +354,7 @@ export default function Home() {
           </nav>
           <div className="flex items-center gap-2.5">
             <NavSignIn />
-            <AuthCta className="shadow-lg shadow-primary/25" />
+            <NavBookDemo className="shadow-lg shadow-primary/25" />
           </div>
         </div>
       </header>
