@@ -10,7 +10,7 @@ import { Loader2 } from "lucide-react";
 import { startPayFastCheckout } from "@/lib/start-checkout";
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, signOut } = useAuth();
   const {
     membership,
     organisation,
@@ -53,6 +53,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
           <p className="text-sm text-muted-foreground">
             Your account is not attached to an active organisation. Ask an organisation admin to add you or send an invitation.
           </p>
+          <Button variant="ghost" onClick={signOut}>Sign out</Button>
         </div>
       </div>
     );
@@ -118,6 +119,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
               Your organisation hasn&apos;t added a payment card yet. Ask an organisation admin to set up billing to restore access.
             </p>
           )}
+          <Button variant="ghost" onClick={signOut}>Sign out</Button>
         </div>
       </div>
     );
@@ -137,6 +139,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
           <Button asChild>
             <Link href="/pricing">View plans</Link>
           </Button>
+          <Button variant="ghost" onClick={signOut}>Sign out</Button>
         </div>
       </div>
     );

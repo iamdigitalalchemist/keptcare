@@ -41,6 +41,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    // Full reload drops in-memory query/practice data from the previous user.
+    window.location.assign("/auth");
   };
 
   return (

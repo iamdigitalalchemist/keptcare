@@ -1,7 +1,8 @@
 "use client";
 
-import { LayoutDashboard, Users, Bot, MessageSquare, Megaphone, Bell, CreditCard, Settings, ShieldCheck, Star, Filter, BarChart3, CalendarCheck, Building2 } from "lucide-react";
+import { LayoutDashboard, Users, Bot, MessageSquare, Megaphone, Bell, CreditCard, Settings, ShieldCheck, Star, Filter, BarChart3, CalendarCheck, Building2, LogOut } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
+import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 import {
   Sidebar,
@@ -50,6 +51,7 @@ function getInitials(name: string) {
 export function AppSidebar() {
   const { state } = useSidebar();
   const { hasPermission, isPlatformAdmin, organisation } = useSubscription();
+  const { signOut } = useAuth();
   const collapsed = state === "collapsed";
   const canManageOrganisation = hasPermission("users.manage") || hasPermission("roles.manage") || hasPermission("organisation.manage");
   const organisationName = organisation?.name || "KeptCare";
@@ -127,6 +129,12 @@ export function AppSidebar() {
               </SidebarMenuButton>
             </SidebarMenuItem>
           ))}
+          <SidebarMenuItem>
+            <SidebarMenuButton onClick={signOut} tooltip="Sign out">
+              <LogOut className="h-4 w-4" />
+              {!collapsed && <span>Sign out</span>}
+            </SidebarMenuButton>
+          </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
     </Sidebar>
