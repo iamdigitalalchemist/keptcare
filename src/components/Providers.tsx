@@ -6,7 +6,6 @@ import { useState } from "react";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { Toaster as Sonner } from "@/components/ui/sonner";
-import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -19,7 +18,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
           <SubscriptionProvider>
             <TooltipProvider>
               {children}
-              <Toaster />
               <Sonner />
             </TooltipProvider>
           </SubscriptionProvider>

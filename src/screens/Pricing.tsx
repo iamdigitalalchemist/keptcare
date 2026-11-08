@@ -15,7 +15,7 @@ import {
 import { Check, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSubscription } from "@/contexts/SubscriptionContext";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { startPayFastCheckout } from "@/lib/start-checkout";
 import { TIER_LIMITS, limitLabel, type TierLimit } from "@/lib/limits";
 
@@ -90,7 +90,6 @@ interface DowngradeInfo {
 
 export default function Pricing() {
   const { tier: currentTier, pendingTier, organisation, isOrgAdmin, isTrialActive, refreshSubscription } = useSubscription();
-  const { toast } = useToast();
   const [loadingTier, setLoadingTier] = useState<Tier | null>(null);
   const [downgradeInfo, setDowngradeInfo] = useState<DowngradeInfo | null>(null);
 
@@ -105,7 +104,7 @@ export default function Pricing() {
   const startCheckout = async (tier: Tier) => {
     const error = await startPayFastCheckout(tier);
     if (error) {
-      toast({ title: "Could not start checkout", description: error, variant: "destructive" });
+      toast.error("Could not start checkout", { description: error });
     }
   };
 
@@ -113,7 +112,7 @@ export default function Pricing() {
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token;
     if (!token) {
-      toast({ title: "Please sign in again", variant: "destructive" });
+      toast.error("Please sign in again");
       return;
     }
     const res = await fetch("/api/payfast/change", {
@@ -131,23 +130,20 @@ export default function Pricing() {
       return;
     }
     if (!res.ok) {
-      toast({ title: "Could not change plan", description: body.error, variant: "destructive" });
+      toast.error("Could not change plan", { description: body.error });
       return;
     }
     await refreshSubscription();
     if (body.cancelledDowngrade) {
-      toast({
-        title: "Downgrade cancelled",
+      toast.success("Downgrade cancelled", {
         description: `You'll stay on ${plans.find((p) => p.tier === tier)?.name}.`,
       });
     } else if (body.isUpgrade) {
-      toast({
-        title: `Welcome to ${plans.find((p) => p.tier === tier)?.name}!`,
+      toast.success(`Welcome to ${plans.find((p) => p.tier === tier)?.name}!`, {
         description: `New price of R${body.newAmountZar.toLocaleString("en-ZA")}/month applies from your next billing date.`,
       });
     } else {
-      toast({
-        title: "Plan change scheduled",
+      toast.success("Plan change scheduled", {
         description: `You'll switch to ${plans.find((p) => p.tier === tier)?.name} on ${periodEnd ?? "your next billing date"}.`,
       });
     }
@@ -173,11 +169,7 @@ export default function Pricing() {
 
   const handleSelect = async (tier: Tier) => {
     if (!isOrgAdmin) {
-      toast({
-        title: "Admins only",
-        description: "Only organisation admins can change the plan.",
-        variant: "destructive",
-      });
+      toast.error("Admins only", { description: "Only organisation admins can change the plan." });
       return;
     }
 
@@ -193,7 +185,7 @@ export default function Pricing() {
         await startCheckout(tier);
       }
     } catch {
-      toast({ title: "Something went wrong", variant: "destructive" });
+      toast.error("Something went wrong");
     } finally {
       setLoadingTier(null);
     }
