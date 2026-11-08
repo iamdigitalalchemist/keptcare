@@ -8,7 +8,7 @@ import {
   PLAN_PRICES_ZAR,
   type Tier,
 } from "@/lib/payfast";
-import { setSubscriptionNextRun } from "@/lib/payfast-api";
+import { cancelSubscription, setSubscriptionNextRun } from "@/lib/payfast-api";
 
 export const runtime = "nodejs";
 
@@ -24,6 +24,11 @@ export const runtime = "nodejs";
 // upgrade/downgrade the subscription bills a different amount, so renewals must
 // NOT derive the tier from custom_str2 — the DB (pending_tier ?? subscription_tier)
 // is the source of truth for what PayFast should be charging.
+//
+// One subscription per org: checkout refuses to start while a token is on file
+// (409) and a mid-trial upgrade clears the token before re-checkout, so a
+// COMPLETE for any other token is an orphaned duplicate (e.g. "Add card"
+// completed in two tabs) and is cancelled at PayFast.
 export async function POST(req: Request) {
   const raw = await req.text();
   const params = new URLSearchParams(raw);
@@ -72,6 +77,18 @@ export async function POST(req: Request) {
     .eq("id", organisationId)
     .maybeSingle();
 
+  // A retry of an ITN we already handled. Checked up front because the org has
+  // moved on since (e.g. a retried R0 trial setup would now fail the amount
+  // check). The unique index on pf_payment_id below still settles races.
+  if (data.pf_payment_id) {
+    const { data: seen } = await supabaseAdmin
+      .from("payfast_payments")
+      .select("id")
+      .eq("pf_payment_id", data.pf_payment_id)
+      .maybeSingle();
+    if (seen) return new NextResponse("OK", { status: 200 });
+  }
+
   const isCreation = !org?.payfast_token && !!data.token;
   // A notification for a subscription that is no longer the org's current one
   // (e.g. the R0 trial subscription cancelled during a mid-trial upgrade, whose
@@ -82,6 +99,49 @@ export async function POST(req: Request) {
   // signup); a renewal bills whatever the subscription is scheduled at.
   const expectedTier: Tier = isCreation ? checkoutTier : (org?.pending_tier ?? org?.subscription_tier ?? checkoutTier);
   const expectedZar = PLAN_PRICES_ZAR[expectedTier];
+
+  // Record the payment (audit log). The partial unique index on pf_payment_id
+  // doubles as the idempotency gate: PayFast retries the ITN, and two
+  // concurrent deliveries can't both pass a SELECT-then-INSERT, so we insert
+  // first and treat a unique violation as "already processed".
+  const recordPayment = async (): Promise<"recorded" | "duplicate"> => {
+    const { error: insertErr } = await supabaseAdmin.from("payfast_payments").insert({
+      organisation_id: organisationId,
+      m_payment_id: data.m_payment_id ?? null,
+      pf_payment_id: data.pf_payment_id ?? null,
+      token: data.token ?? null,
+      tier: checkoutTier,
+      amount_gross: data.amount_gross ? Number(data.amount_gross) : null,
+      payment_status: paymentStatus ?? "UNKNOWN",
+      raw: data,
+    });
+    if (insertErr?.code === "23505") return "duplicate";
+    // Audit logging must not block activating a genuinely paid subscription.
+    if (insertErr) console.error("[payfast] failed to record payment", insertErr);
+    return "recorded";
+  };
+
+  // A notification for a subscription that is no longer the org's current one
+  // never touches org state. This runs before the amount check: the ITN is
+  // already authenticated, and a duplicate R0 trial setup would fail it.
+  if (isStaleToken) {
+    await recordPayment();
+    if (paymentStatus === "COMPLETE") {
+      // Cancel even on a retried ITN: cancel is idempotent (404 counts as done),
+      // and a retry is the only second chance if the first attempt failed.
+      const cancelled = await cancelSubscription(data.token);
+      console.warn("[payfast] COMPLETE for a superseded subscription token — cancelling it at PayFast", {
+        organisationId,
+        cancelled,
+      });
+    } else {
+      console.warn("[payfast] ITN for a superseded subscription token — recorded, not applied", {
+        organisationId,
+        paymentStatus,
+      });
+    }
+    return new NextResponse("OK", { status: 200 });
+  }
 
   // (4) Amount check — only meaningful for a COMPLETE payment. A creation is
   // either the R0.00 trial setup (Starter only — the trial never applies to
@@ -104,34 +164,8 @@ export async function POST(req: Request) {
     }
   }
 
-  // Record the payment (audit log). The partial unique index on pf_payment_id
-  // doubles as the idempotency gate: PayFast retries the ITN, and two
-  // concurrent deliveries can't both pass a SELECT-then-INSERT, so we insert
-  // first and treat a unique violation as "already processed".
-  const { error: insertErr } = await supabaseAdmin.from("payfast_payments").insert({
-    organisation_id: organisationId,
-    m_payment_id: data.m_payment_id ?? null,
-    pf_payment_id: data.pf_payment_id ?? null,
-    token: data.token ?? null,
-    tier: checkoutTier,
-    amount_gross: data.amount_gross ? Number(data.amount_gross) : null,
-    payment_status: paymentStatus ?? "UNKNOWN",
-    raw: data,
-  });
-  if (insertErr) {
-    if (insertErr.code === "23505") {
-      // Duplicate pf_payment_id — this notification was already handled.
-      return new NextResponse("OK", { status: 200 });
-    }
-    // Audit logging must not block activating a genuinely paid subscription.
-    console.error("[payfast] failed to record payment", insertErr);
-  }
-
-  if (isStaleToken) {
-    console.warn("[payfast] ITN for a superseded subscription token — recorded, not applied", {
-      organisationId,
-      paymentStatus,
-    });
+  if ((await recordPayment()) === "duplicate") {
+    // Duplicate pf_payment_id — this notification was already handled.
     return new NextResponse("OK", { status: 200 });
   }
 
@@ -157,7 +191,10 @@ export async function POST(req: Request) {
         ? trialEndsAt.toISOString()
         : oneMonthFrom(new Date());
 
-      const { error } = await supabaseAdmin
+      // Only claim the org while no token is on file: two creation ITNs that
+      // both read an empty token (two-tab checkout) must not both win, or the
+      // first subscription keeps charging with nothing pointing at it.
+      const { data: claimed, error } = await supabaseAdmin
         .from("organisations")
         .update({
           subscription_active: true,
@@ -166,8 +203,19 @@ export async function POST(req: Request) {
           payfast_token: data.token ?? null,
           pending_tier: null,
         })
-        .eq("id", organisationId);
-      if (error) console.error("[payfast] failed to activate org", error);
+        .eq("id", organisationId)
+        .is("payfast_token", null)
+        .select("id");
+      if (error) {
+        console.error("[payfast] failed to activate org", error);
+      } else if (!claimed?.length) {
+        const cancelled = data.token ? await cancelSubscription(data.token) : false;
+        console.warn("[payfast] creation ITN lost the race to another subscription — cancelling it at PayFast", {
+          organisationId,
+          cancelled,
+        });
+        return new NextResponse("OK", { status: 200 });
+      }
 
       // Anchor the billing schedule: R0 today, first R3,500 charge on the day
       // the trial ends, then monthly on that date.

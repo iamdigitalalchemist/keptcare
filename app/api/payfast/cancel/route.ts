@@ -37,10 +37,16 @@ export async function POST(req: Request) {
   }
 
   // Clear the token locally; the org keeps access until subscription_period_end.
-  await supabaseAdmin
+  const { error: clearErr } = await supabaseAdmin
     .from("organisations")
     .update({ payfast_token: null })
     .eq("id", authed.organisationId);
+  if (clearErr) {
+    // The gateway subscription is already cancelled — retrying is safe (cancel
+    // tolerates 404) and converges on a cleared token.
+    console.error("[payfast] failed to clear cancelled token", clearErr);
+    return NextResponse.json({ error: "Failed to record the cancellation" }, { status: 500 });
+  }
 
   return NextResponse.json({ ok: true });
 }
