@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
+import type { PostgrestError } from "@supabase/supabase-js";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 import { limitViolation } from "@/lib/limits";
 import type {
@@ -318,6 +319,24 @@ function buildStats(data: Omit<PracticeData, "dashboardStats" | "loyaltyStats">)
   };
 }
 
+// PostgREST caps every response at 1,000 rows (Supabase's default max_rows),
+// so a single select silently truncates a large practice. Page through with
+// range() until a short page comes back. Each query needs a unique final sort
+// key (id) so rows can't shift between pages.
+const PAGE_SIZE = 1000;
+
+async function fetchAll<T>(
+  page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: PostgrestError | null }>,
+): Promise<{ data: T[] | null; error: PostgrestError | null }> {
+  const rows: T[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await page(from, from + PAGE_SIZE - 1);
+    if (error) return { data: null, error };
+    rows.push(...(data ?? []));
+    if (!data || data.length < PAGE_SIZE) return { data: rows, error: null };
+  }
+}
+
 async function fetchPracticeData(organisationId: string): Promise<PracticeData> {
   const [
     patientsResult,
@@ -332,21 +351,25 @@ async function fetchPracticeData(organisationId: string): Promise<PracticeData> 
     referralRecordsResult,
     patientSegmentsResult,
   ] = await Promise.all([
-    supabase.from("patients").select("*").eq("organisation_id", organisationId).order("last_visit", { ascending: false }),
-    supabase.from("appointments").select("*").eq("organisation_id", organisationId).order("appointment_date", { ascending: false }),
-    supabase.from("communication_logs").select("*").eq("organisation_id", organisationId).order("sent_at", { ascending: false }),
-    supabase.from("automation_rules").select("*").eq("organisation_id", organisationId).order("created_at", { ascending: false }),
-    supabase.from("message_templates").select("*").eq("organisation_id", organisationId).order("created_at", { ascending: false }),
-    supabase.from("campaigns").select("*").eq("organisation_id", organisationId).order("created_at", { ascending: false }),
-    supabase.from("alerts").select("*").eq("organisation_id", organisationId).order("alert_date", { ascending: false }),
-    supabase.from("loyalty_rewards").select("*").eq("organisation_id", organisationId).order("points_cost", { ascending: true }),
-    supabase
-      .from("loyalty_members")
-      .select("*, patients(first_name,last_name), loyalty_member_rewards(*, loyalty_rewards(*))")
-      .eq("organisation_id", organisationId)
-      .order("points", { ascending: false }),
-    supabase.from("referral_records").select("*").eq("organisation_id", organisationId).order("created_at", { ascending: false }),
-    supabase.from("patient_segments").select("*").eq("organisation_id", organisationId).order("created_at", { ascending: true }),
+    fetchAll((from, to) => supabase.from("patients").select("*").eq("organisation_id", organisationId).order("last_visit", { ascending: false }).order("id").range(from, to)),
+    fetchAll((from, to) => supabase.from("appointments").select("*").eq("organisation_id", organisationId).order("appointment_date", { ascending: false }).order("id").range(from, to)),
+    fetchAll((from, to) => supabase.from("communication_logs").select("*").eq("organisation_id", organisationId).order("sent_at", { ascending: false }).order("id").range(from, to)),
+    fetchAll((from, to) => supabase.from("automation_rules").select("*").eq("organisation_id", organisationId).order("created_at", { ascending: false }).order("id").range(from, to)),
+    fetchAll((from, to) => supabase.from("message_templates").select("*").eq("organisation_id", organisationId).order("created_at", { ascending: false }).order("id").range(from, to)),
+    fetchAll((from, to) => supabase.from("campaigns").select("*").eq("organisation_id", organisationId).order("created_at", { ascending: false }).order("id").range(from, to)),
+    fetchAll((from, to) => supabase.from("alerts").select("*").eq("organisation_id", organisationId).order("alert_date", { ascending: false }).order("id").range(from, to)),
+    fetchAll((from, to) => supabase.from("loyalty_rewards").select("*").eq("organisation_id", organisationId).order("points_cost", { ascending: true }).order("id").range(from, to)),
+    fetchAll((from, to) =>
+      supabase
+        .from("loyalty_members")
+        .select("*, patients(first_name,last_name), loyalty_member_rewards(*, loyalty_rewards(*))")
+        .eq("organisation_id", organisationId)
+        .order("points", { ascending: false })
+        .order("id")
+        .range(from, to),
+    ),
+    fetchAll((from, to) => supabase.from("referral_records").select("*").eq("organisation_id", organisationId).order("created_at", { ascending: false }).order("id").range(from, to)),
+    fetchAll((from, to) => supabase.from("patient_segments").select("*").eq("organisation_id", organisationId).order("created_at", { ascending: true }).order("id").range(from, to)),
   ]);
 
   const results = [
