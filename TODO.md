@@ -1,7 +1,7 @@
 # keptcare — TODO
 
 ## Launch blockers
-- [ ] Supabase Auth URL config (Dashboard → Auth → URL Configuration): set Site URL to `https://keptcare.vercel.app` and add redirect URLs for `/dashboard`, `/accept-invite`, `/reset-password` (+ `http://localhost:3000/**` for dev). Fixes welcome/confirmation emails redirecting to `localhost:3000`.
+- [ ] Supabase Auth URL config (Dashboard → Auth → URL Configuration): set Site URL to `https://www.kept-care.co.za` and add redirect URLs for `/dashboard`, `/accept-invite`, `/reset-password` (+ `http://localhost:3000/**` for dev). Fixes welcome/confirmation emails redirecting to `localhost:3000`.
 - [ ] Set real ZAR prices in `PLAN_PRICES_ZAR` (`src/lib/payfast.ts`) — ITN validates paid amounts against these
 - [ ] PayFast go-live env swap on Vercel (live merchant id/key/passphrase, `PAYFAST_SANDBOX=false`) — see "Go-live checklist" in `docs/payfast.md`
 
@@ -18,7 +18,9 @@
 - [ ] Legacy prod rows: the 4 test orgs have `subscription_active = true` with no payment (old default). Harmless (no period end ⇒ no paid access) but worth resetting to false.
 
 ## Infrastructure
-- [ ] Set up custom domain on Vercel (then update `NEXT_PUBLIC_APP_URL` + Supabase auth URLs)
+- [x] Custom domain on Vercel: `www.kept-care.co.za` (apex redirects to www)
+- [ ] Set Vercel Production `NEXT_PUBLIC_APP_URL=https://www.kept-care.co.za` and redeploy. It is still `https://keptcare.vercel.app`, so PayFast return/cancel/notify and Twilio callbacks use the old host (#2)
+- [ ] Keep `keptcare.vercel.app` serving the app (no redirect) until subscriptions created with its `notify_url` are cancelled. PayFast sends recurring ITNs to the checkout-time `notify_url`
 
 ## SMS (Twilio)
 - [ ] Add Twilio env vars to Vercel Production (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_MESSAGING_SERVICE_SID` or `TWILIO_FROM_NUMBER`) — see `docs/twilio.md`. SID/token are in local `.env`; a sender still needs to be chosen.

@@ -259,8 +259,12 @@ Before flipping the switch, also:
   R7,000. If these aren't the final prices, change them in `src/lib/payfast.ts`
   (and the pricing page copy) — the ITN validates paid amounts against them to
   the cent.
-- **Custom domain**: update `NEXT_PUBLIC_APP_URL` (return/cancel/notify URLs
-  derive from it) and the Supabase Auth URL configuration.
+- **Domain**: `NEXT_PUBLIC_APP_URL` must be exactly `https://www.kept-care.co.za`
+  (return/cancel/notify URLs derive from it; the apex 308-redirects and the ITN
+  POST may not follow it). Redeploy after changing it, because `NEXT_PUBLIC_*`
+  is inlined at build time. Also update the Supabase Auth URL configuration.
+  PayFast sends recurring ITNs to the `notify_url` given at checkout, so keep any
+  previous host serving `/api/payfast/notify` until its subscriptions are gone.
 - The live PayFast account must be verified (FICA) and have subscriptions
   enabled, or checkout will be rejected.
 

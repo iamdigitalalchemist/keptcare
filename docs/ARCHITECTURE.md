@@ -17,8 +17,8 @@ See also: [`payfast.md`](./payfast.md) (billing flows, go-live checklist) and
 | Data | Supabase (Postgres, Auth, RLS) via `@supabase/supabase-js`, TanStack Query on the client |
 | Payments | PayFast hosted checkout and subscription API (`src/lib/payfast*.ts`) |
 | SMS | Twilio REST API called directly with `fetch` (`src/lib/twilio.ts`) |
-| Tests | Vitest and jsdom (`src/lib/*.test.ts`). Playwright is configured, but there are no specs yet |
-| Hosting | Vercel (`keptcare.vercel.app`) |
+| Tests | Vitest: `src/lib/*.test.ts` (jsdom) and route tests such as `src/test/payfast-notify.test.ts` (node, with Supabase and PayFast mocked). Playwright is configured, but there are no specs yet |
+| Hosting | Vercel (`www.kept-care.co.za`; `keptcare.vercel.app` still serves the app) |
 
 ## Directory layout
 
