@@ -8,20 +8,10 @@
 ## Infrastructure
 - [ ] Set up custom domain on Vercel (then update `NEXT_PUBLIC_APP_URL` + Supabase auth URLs)
 
-## Messaging (Zernio — SMS, WhatsApp, email)
-- [ ] Zernio account setup: API key, SMS number/sender ID, WhatsApp account + approved templates, practice mailbox — see `docs/zernio.md`
-- [ ] Add Zernio env vars to Vercel Production (`ZERNIO_API_KEY`, `ZERNIO_SMS_FROM`, `ZERNIO_WHATSAPP_ACCOUNT_ID`, `ZERNIO_EMAIL_ACCOUNT_ID`, `ZERNIO_WEBHOOK_SECRET`)
-- [ ] Register `/api/zernio/webhook` in Zernio and confirm the delivery-event payload fields (route assumes `message.id`)
-- [ ] Remove Twilio env vars from local `.env` / Vercel (Twilio replaced by Zernio)
-- [x] SMS / WhatsApp / Email buttons on PatientDetail → `SendMessageDialog` → `POST /api/messages/send`
-
-## Done
-- [x] Twilio migration applied to local + hosted DB
-- [x] PayFast migrations applied to local + hosted DB
-- [x] Tier-limits migration (`20260912000000`) pushed to hosted DB — it had been missed; `enforce_tier_limits` is now live in production
-- [x] `subscription_active` default-false migration (`20260914000000`) applied to hosted DB
-- [x] Vercel prod env fixed (Supabase URL/key were empty) + PayFast sandbox creds
-- [x] Subscription expiry enforcement (`subscription_period_end` + 3-day grace)
-- [x] Mandatory card-capture gate (ProtectedRoute) — no app access without a `payfast_token`; `TrialCardBanner` removed
-- [x] Mid-trial upgrade to Growth/Pro bills immediately (cancel trial sub + re-checkout); ITN creation amount check validates checkout tier
-- [x] Send SMS action on PatientDetail (now `SendMessageDialog` → `POST /api/messages/send`)
+## Messaging (Sendexa — SMS, WhatsApp, email)
+- [ ] Sendexa account setup: API token, approved SMS sender ID, WhatsApp number + approved templates, verified email domain — see `docs/sendexa.md`
+- [ ] Confirm Sendexa delivers to South African (+27) numbers — docs examples are all Ghana (+233)
+- [ ] Add Sendexa env vars to Vercel Production (`SENDEXA_API_TOKEN`, `SENDEXA_SMS_FROM`, `SENDEXA_EMAIL_FROM`, `SENDEXA_WEBHOOK_SECRET`)
+- [ ] Register `/api/sendexa/webhook` in Sendexa and confirm the delivery-event payload (route accepts `{ messageId, status }` or `{ event, data: { messageId } }`)
+- [ ] Confirm the WhatsApp template request shape with a real send (assumed Meta Cloud API format)
+- [ ] Remove Twilio env vars from Vercel if any were added (Twilio replaced)

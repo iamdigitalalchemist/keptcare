@@ -193,7 +193,7 @@ export function SendMessageDialog({ open, onOpenChange, channel, patient, templa
             )}
             {templateOnly && (
               <p className="text-xs text-muted-foreground">
-                WhatsApp needs a Meta-approved template; the template name must match the one approved in Zernio.
+                WhatsApp needs a Meta-approved template; the template name must match the one approved in Sendexa.
               </p>
             )}
           </div>

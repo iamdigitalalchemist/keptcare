@@ -13,7 +13,7 @@ export interface SendMessageInput {
 
 export type SendMessageResult = { ok: true } | { ok: false; error: string };
 
-// Sends a patient message via /api/messages/send, which relays through Zernio
+// Sends a patient message via /api/messages/send, which relays through Sendexa
 // and records the attempt in communication_logs. The caller's Supabase access
 // token authorizes the request (same pattern as startPayFastCheckout).
 export async function sendPatientMessage(input: SendMessageInput): Promise<SendMessageResult> {

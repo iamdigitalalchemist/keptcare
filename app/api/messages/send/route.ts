@@ -5,13 +5,13 @@ import { normalizePhone } from "@/lib/twilio";
 import { renderTemplate } from "@/lib/render-template";
 import {
   type Channel,
-  missingZernioEnv,
-  sendZernioEmail,
-  sendZernioSms,
-  sendZernioWhatsAppTemplate,
+  missingSendexaEnv,
+  sendSendexaEmail,
+  sendSendexaSms,
+  sendSendexaWhatsAppTemplate,
   textToHtml,
-  ZernioError,
-} from "@/lib/zernio";
+  SendexaError,
+} from "@/lib/sendexa";
 
 export const runtime = "nodejs";
 
@@ -19,15 +19,15 @@ const CHANNELS: Channel[] = ["sms", "whatsapp", "email"];
 const CONSENT_COLUMN = { sms: "consent_sms", whatsapp: "consent_whatsapp", email: "consent_email" } as const;
 const LABEL = { sms: "SMS", whatsapp: "WhatsApp", email: "email" } as const;
 
-// POST /api/messages/send — send a patient message through Zernio.
+// POST /api/messages/send — send a patient message through Sendexa.
 // Body: { channel: "sms" | "whatsapp" | "email", patientId } plus either
 //   { message, subject? }                 — free-form (sms / email only), or
 //   { templateId, variables? }            — a stored template of the same channel.
 // patient_name / first_name / last_name / practice_name are auto-filled.
 // WhatsApp is template-only: the template's `name` must be the approved Meta
-// template name, and its `variables` (in order) become {{1}}, {{2}}, …
+// template name in Sendexa, and its `variables` (in order) become {{1}}, {{2}}, …
 // Each send is recorded in communication_logs; delivery updates arrive on
-// /api/zernio/webhook.
+// /api/sendexa/webhook.
 export async function POST(req: Request) {
   const authed = await getAuthedOrg(req);
   if (!authed) {
@@ -65,9 +65,9 @@ export async function POST(req: Request) {
     );
   }
 
-  const missing = missingZernioEnv(channel);
+  const missing = missingSendexaEnv(channel);
   if (missing.length) {
-    console.error(`[zernio] ${channel} not configured, missing: ${missing.join(", ")}`);
+    console.error(`[sendexa] ${channel} not configured, missing: ${missing.join(", ")}`);
     return NextResponse.json({ error: `${LABEL[channel]} is not configured` }, { status: 500 });
   }
 
@@ -139,24 +139,24 @@ export async function POST(req: Request) {
   let result;
   try {
     if (channel === "sms") {
-      result = await sendZernioSms({ to: phone!, text });
+      result = await sendSendexaSms({ to: phone!, text });
     } else if (channel === "whatsapp") {
-      result = await sendZernioWhatsAppTemplate({
+      result = await sendSendexaWhatsAppTemplate({
         to: phone!,
         templateName: template!.name,
         params: template!.variables.map((name) => vars[name] ?? ""),
       });
     } else {
-      result = await sendZernioEmail({
+      result = await sendSendexaEmail({
         to: email!,
-        toName: vars.patient_name,
         subject,
         html: textToHtml(text),
+        text,
       });
     }
   } catch (err) {
-    const message = err instanceof ZernioError ? err.message : `Failed to send ${LABEL[channel]}`;
-    console.error(`[zernio] ${channel} send failed`, { patientId: patient.id, err });
+    const message = err instanceof SendexaError ? err.message : `Failed to send ${LABEL[channel]}`;
+    console.error(`[sendexa] ${channel} send failed`, { patientId: patient.id, err });
     return NextResponse.json({ error: message }, { status: 502 });
   }
 
@@ -177,7 +177,7 @@ export async function POST(req: Request) {
 
   if (logErr) {
     // The message went out; a logging failure shouldn't read as a send failure.
-    console.error("[zernio] failed to write communication log", logErr);
+    console.error("[sendexa] failed to write communication log", logErr);
   }
 
   return NextResponse.json({ id: result.id, status: result.status, logId: log?.id ?? null });
