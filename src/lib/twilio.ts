@@ -100,7 +100,7 @@ export class TwilioError extends Error {
 
 /**
  * Send an SMS via the Twilio REST API. `statusCallback`, when set, receives
- * delivery updates (see /api/sms/status).
+ * delivery updates (unused since Zernio replaced Twilio).
  */
 export async function sendSms(
   config: TwilioConfig,

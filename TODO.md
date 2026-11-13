@@ -8,9 +8,12 @@
 ## Infrastructure
 - [ ] Set up custom domain on Vercel (then update `NEXT_PUBLIC_APP_URL` + Supabase auth URLs)
 
-## SMS (Twilio)
-- [ ] Add Twilio env vars to Vercel Production (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_MESSAGING_SERVICE_SID` or `TWILIO_FROM_NUMBER`) — see `docs/twilio.md`. SID/token are in local `.env`; a sender still needs to be chosen.
-- [x] Wire a "Send SMS" action in the UI (e.g. PatientDetail) to `POST /api/sms/send` — Send SMS button on PatientDetail opens `SendSmsDialog` (free-form or SMS template with live preview, consent/phone gating)
+## Messaging (Zernio — SMS, WhatsApp, email)
+- [ ] Zernio account setup: API key, SMS number/sender ID, WhatsApp account + approved templates, practice mailbox — see `docs/zernio.md`
+- [ ] Add Zernio env vars to Vercel Production (`ZERNIO_API_KEY`, `ZERNIO_SMS_FROM`, `ZERNIO_WHATSAPP_ACCOUNT_ID`, `ZERNIO_EMAIL_ACCOUNT_ID`, `ZERNIO_WEBHOOK_SECRET`)
+- [ ] Register `/api/zernio/webhook` in Zernio and confirm the delivery-event payload fields (route assumes `message.id`)
+- [ ] Remove Twilio env vars from local `.env` / Vercel (Twilio replaced by Zernio)
+- [x] SMS / WhatsApp / Email buttons on PatientDetail → `SendMessageDialog` → `POST /api/messages/send`
 
 ## Done
 - [x] Twilio migration applied to local + hosted DB
@@ -21,4 +24,4 @@
 - [x] Subscription expiry enforcement (`subscription_period_end` + 3-day grace)
 - [x] Mandatory card-capture gate (ProtectedRoute) — no app access without a `payfast_token`; `TrialCardBanner` removed
 - [x] Mid-trial upgrade to Growth/Pro bills immediately (cancel trial sub + re-checkout); ITN creation amount check validates checkout tier
-- [x] Send SMS action on PatientDetail (`SendSmsDialog` → `POST /api/sms/send`)
+- [x] Send SMS action on PatientDetail (now `SendMessageDialog` → `POST /api/messages/send`)
