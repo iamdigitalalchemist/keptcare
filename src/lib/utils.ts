@@ -12,8 +12,10 @@ const dateFormatter = new Intl.DateTimeFormat("en-GB", {
   timeZone: "UTC",
 });
 
-export function formatDate(value: string | number | Date) {
-  return dateFormatter.format(new Date(value));
+export function formatDate(value: string | number | Date | null | undefined) {
+  // Optional fields (DOB, last visit) can be empty; Intl throws on an invalid date.
+  const date = value == null || value === "" ? null : new Date(value);
+  return date && !Number.isNaN(date.getTime()) ? dateFormatter.format(date) : "—";
 }
 
 export function formatNumber(value: number) {
