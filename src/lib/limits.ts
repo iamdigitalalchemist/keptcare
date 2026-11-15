@@ -21,6 +21,30 @@ export const TIER_LIMITS: Record<Tier, TierLimit> = {
 
 export const UNLIMITED = Number.POSITIVE_INFINITY;
 
+// shortcut: one flat cap for every plan (issue #25 cites 500/24h); make it per-tier
+// with included credits once pricing for messaging is decided.
+/** Max messages an organisation can send in any rolling 24 hours, all channels. */
+export const DAILY_MESSAGE_CAP = 500;
+
+const PERIOD_END_GRACE_MS = 3 * 24 * 60 * 60 * 1000;
+
+/**
+ * Server-side twin of SubscriptionContext's isSubscriptionActive: access during
+ * the trial, or while paid up to subscription_period_end + a 3-day grace for
+ * late renewal notifications. A NULL period end means never paid.
+ */
+export function hasSubscriptionAccess(
+  org: { subscription_active: boolean; subscription_period_end: string | null; trial_ends_at: string | null },
+  now = Date.now(),
+): boolean {
+  const trial = org.trial_ends_at ? now < new Date(org.trial_ends_at).getTime() : false;
+  const paid =
+    org.subscription_active &&
+    !!org.subscription_period_end &&
+    now < new Date(org.subscription_period_end).getTime() + PERIOD_END_GRACE_MS;
+  return trial || paid;
+}
+
 /** Human-readable limit for tooltips/messages, e.g. "1,000" or "Unlimited". */
 export function limitLabel(value: number): string {
   return value === UNLIMITED ? "Unlimited" : value.toLocaleString("en-ZA");

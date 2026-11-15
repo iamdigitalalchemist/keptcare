@@ -1,5 +1,29 @@
 import { describe, it, expect } from "vitest";
-import { limitViolation, TIER_LIMITS, limitLabel } from "./limits";
+import { limitViolation, TIER_LIMITS, limitLabel, hasSubscriptionAccess } from "./limits";
+
+describe("hasSubscriptionAccess", () => {
+  const now = new Date("2026-11-15T12:00:00Z").getTime();
+  const day = 24 * 60 * 60 * 1000;
+  const iso = (offset: number) => new Date(now + offset).toISOString();
+  const org = (o: Partial<Parameters<typeof hasSubscriptionAccess>[0]>) => ({
+    subscription_active: false, subscription_period_end: null, trial_ends_at: null, ...o,
+  });
+
+  it("allows an active trial", () => {
+    expect(hasSubscriptionAccess(org({ trial_ends_at: iso(day) }), now)).toBe(true);
+  });
+
+  it("allows paid access through the 3-day grace, then stops", () => {
+    expect(hasSubscriptionAccess(org({ subscription_active: true, subscription_period_end: iso(-2 * day) }), now)).toBe(true);
+    expect(hasSubscriptionAccess(org({ subscription_active: true, subscription_period_end: iso(-4 * day) }), now)).toBe(false);
+  });
+
+  it("denies expired trials, never-paid orgs and inactive subscriptions", () => {
+    expect(hasSubscriptionAccess(org({ trial_ends_at: iso(-day) }), now)).toBe(false);
+    expect(hasSubscriptionAccess(org({ subscription_active: true }), now)).toBe(false);
+    expect(hasSubscriptionAccess(org({ subscription_period_end: iso(day) }), now)).toBe(false);
+  });
+});
 
 describe("limitViolation", () => {
   it("allows inserts below the cap", () => {

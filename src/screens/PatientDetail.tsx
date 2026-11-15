@@ -49,7 +49,7 @@ export default function PatientDetail() {
   const { id } = useParams();
   const router = useRouter();
   const { data, isLoading, organisationId } = usePracticeData();
-  const { organisation } = useSubscription();
+  const { organisation, limits } = useSubscription();
   const { updatePatient, deletePatient } = usePracticeMutations();
   const [editOpen, setEditOpen] = useState(false);
   const [messageChannel, setMessageChannel] = useState<MessageChannel | null>(null);
@@ -122,19 +122,24 @@ export default function PatientDetail() {
                       ["sms", "SMS", MessageSquare],
                       ["whatsapp", "WhatsApp", MessageCircle],
                       ["email", "Email", Mail],
-                    ] as const).map(([channel, label, Icon]) => (
-                      <Button
-                        key={channel}
-                        variant="outline"
-                        size="sm"
-                        className="h-7"
-                        disabled={blockedReason(patient, channel) !== null}
-                        title={blockedReason(patient, channel) ?? undefined}
-                        onClick={() => setMessageChannel(channel)}
-                      >
-                        <Icon className="h-3.5 w-3.5 mr-1" /> {label}
-                      </Button>
-                    ))}
+                    ] as const).map(([channel, label, Icon]) => {
+                      const reason = limits.channels.includes(channel)
+                        ? blockedReason(patient, channel)
+                        : `${label} is not on your plan`;
+                      return (
+                        <Button
+                          key={channel}
+                          variant="outline"
+                          size="sm"
+                          className="h-7"
+                          disabled={reason !== null}
+                          title={reason ?? undefined}
+                          onClick={() => setMessageChannel(channel)}
+                        >
+                          <Icon className="h-3.5 w-3.5 mr-1" /> {label}
+                        </Button>
+                      );
+                    })}
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button variant="outline" size="sm" className="h-7 text-destructive hover:text-destructive">

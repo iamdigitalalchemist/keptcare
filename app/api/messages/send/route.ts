@@ -3,6 +3,7 @@ import { getAuthedOrg } from "@/lib/api-auth";
 import { supabaseAdmin } from "@/integrations/supabase/admin";
 import { normalizePhone } from "@/lib/twilio";
 import { renderTemplate } from "@/lib/render-template";
+import { DAILY_MESSAGE_CAP, hasSubscriptionAccess, TIER_LIMITS } from "@/lib/limits";
 import {
   type Channel,
   missingSendexaEnv,
@@ -69,6 +70,42 @@ export async function POST(req: Request) {
   if (missing.length) {
     console.error(`[sendexa] ${channel} not configured, missing: ${missing.join(", ")}`);
     return NextResponse.json({ error: `${LABEL[channel]} is not configured` }, { status: 500 });
+  }
+
+  // Plan rules: active subscription, channel included in the tier, daily cap.
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const [orgRes, sentRes] = await Promise.all([
+    supabaseAdmin
+      .from("organisations")
+      .select("subscription_tier, subscription_active, subscription_period_end, trial_ends_at")
+      .eq("id", authed.organisationId)
+      .single(),
+    supabaseAdmin
+      .from("communication_logs")
+      .select("id", { count: "exact", head: true })
+      .eq("organisation_id", authed.organisationId)
+      .gte("sent_at", since),
+  ]);
+  if (orgRes.error || !orgRes.data || sentRes.error) {
+    console.error("[messages] plan check failed", orgRes.error ?? sentRes.error);
+    return NextResponse.json({ error: "Could not check your plan" }, { status: 500 });
+  }
+  const org = orgRes.data;
+  if (!hasSubscriptionAccess(org)) {
+    return NextResponse.json({ error: "Your subscription is not active" }, { status: 402 });
+  }
+  if (!TIER_LIMITS[org.subscription_tier].channels.includes(channel)) {
+    return NextResponse.json(
+      { error: `${LABEL[channel]} is not included in the ${org.subscription_tier} plan` },
+      { status: 403 },
+    );
+  }
+  // shortcut: count-then-send can overshoot by a few under concurrent sends; fine for a cost guard.
+  if ((sentRes.count ?? 0) >= DAILY_MESSAGE_CAP) {
+    return NextResponse.json(
+      { error: `Daily limit of ${DAILY_MESSAGE_CAP} messages reached. Try again later.` },
+      { status: 429 },
+    );
   }
 
   const [patientRes, templateRes] = await Promise.all([
