@@ -28,6 +28,7 @@ app/                      Next.js routes (thin wrappers that render src/screens/
   api/payfast/*           checkout, change, cancel, notify (ITN webhook)
   api/messages/send       send SMS / WhatsApp / email (authed)
   api/sendexa/webhook     Sendexa delivery webhook
+  api/debug-env           Echoes public env values; keep until issue #2 (domain switch) is verified, then delete (#4)
   auth, accept-invite, reset-password, terms, page.tsx (marketing home)
 src/
   screens/                Page components (one per route)
