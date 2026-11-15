@@ -3,7 +3,8 @@ import { getAuthedOrg } from "@/lib/api-auth";
 import { supabaseAdmin } from "@/integrations/supabase/admin";
 import { normalizePhone } from "@/lib/twilio";
 import { renderTemplate } from "@/lib/render-template";
-import { DAILY_MESSAGE_CAP, hasSubscriptionAccess, TIER_LIMITS } from "@/lib/limits";
+import { DAILY_MESSAGE_CAP, TIER_LIMITS } from "@/lib/limits";
+import { canSendOn } from "@/lib/access";
 import {
   type Channel,
   missingSendexaEnv,
@@ -72,36 +73,49 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: `${LABEL[channel]} is not configured` }, { status: 500 });
   }
 
-  // Plan rules: active subscription, channel included in the tier, daily cap.
+  // Gates (same rules as the UI, src/lib/access.ts): communications.write
+  // permission, an active org whose tier includes the channel (SMS and WhatsApp
+  // need paid access, never the trial), and a per-org daily cap.
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const [orgRes, sentRes] = await Promise.all([
+  const [permissionRes, orgRes, sentRes] = await Promise.all([
+    supabaseAdmin.rpc("has_org_permission", {
+      _organisation_id: authed.organisationId,
+      _permission_key: "communications.write",
+      _user_id: authed.userId,
+    }),
     supabaseAdmin
       .from("organisations")
-      .select("subscription_tier, subscription_active, subscription_period_end, trial_ends_at")
+      .select("subscription_tier, subscription_active, subscription_period_end, trial_ends_at, status")
       .eq("id", authed.organisationId)
-      .single(),
+      .maybeSingle(),
     supabaseAdmin
       .from("communication_logs")
       .select("id", { count: "exact", head: true })
       .eq("organisation_id", authed.organisationId)
       .gte("sent_at", since),
   ]);
-  if (orgRes.error || !orgRes.data || sentRes.error) {
-    console.error("[messages] plan check failed", orgRes.error ?? sentRes.error);
-    return NextResponse.json({ error: "Could not check your plan" }, { status: 500 });
+  if (permissionRes.error || permissionRes.data !== true) {
+    return NextResponse.json({ error: "You don't have permission to send messages" }, { status: 403 });
+  }
+  if (orgRes.error || !orgRes.data) {
+    return NextResponse.json({ error: "Organisation not found" }, { status: 404 });
   }
   const org = orgRes.data;
-  if (!hasSubscriptionAccess(org)) {
-    return NextResponse.json({ error: "Your subscription is not active" }, { status: 402 });
-  }
-  if (!TIER_LIMITS[org.subscription_tier].channels.includes(channel)) {
+  if (!canSendOn(org, channel)) {
+    const onPlan = TIER_LIMITS[org.subscription_tier].channels.includes(channel);
     return NextResponse.json(
-      { error: `${LABEL[channel]} is not included in the ${org.subscription_tier} plan` },
+      {
+        error: !onPlan
+          ? `${LABEL[channel]} is not included in the ${org.subscription_tier} plan`
+          : channel === "email"
+            ? "Your subscription is not active"
+            : `${LABEL[channel]} needs an active paid plan (not available during the trial)`,
+      },
       { status: 403 },
     );
   }
   // shortcut: count-then-send can overshoot by a few under concurrent sends; fine for a cost guard.
-  if ((sentRes.count ?? 0) >= DAILY_MESSAGE_CAP) {
+  if (sentRes.error || (sentRes.count ?? 0) >= DAILY_MESSAGE_CAP) {
     return NextResponse.json(
       { error: `Daily limit of ${DAILY_MESSAGE_CAP} messages reached. Try again later.` },
       { status: 429 },

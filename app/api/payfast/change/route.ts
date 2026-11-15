@@ -54,7 +54,7 @@ export async function POST(req: Request) {
 
   // Mid-trial move to a paid tier. The free trial (and its R0 subscription)
   // only ever applies to Starter; Growth/Pro must bill in full from day one.
-  // A PUT amount change only takes effect at next_run — the trial end date —
+  // A PATCH amount change only takes effect at the next run — the trial end date —
   // which would hand out free days on a paid tier. Cancel the trial
   // subscription instead and have the client run a fresh full-price checkout,
   // which charges immediately. The client's 409 handler does exactly that.
@@ -83,8 +83,13 @@ export async function POST(req: Request) {
     );
   }
 
-  const currentTier = (org.pending_tier ?? org.subscription_tier) as Tier;
-  if (currentTier === tier) {
+  // Features run on subscription_tier; pending_tier is only what the next
+  // charge will switch to. Compare against the ACTIVE tier — comparing against
+  // the scheduled one turned "Pro with a pending Starter downgrade → Growth"
+  // into an "upgrade" that dropped Pro features immediately.
+  const activeTier = org.subscription_tier as Tier;
+  const scheduledTier = (org.pending_tier ?? activeTier) as Tier;
+  if (tier === scheduledTier) {
     return NextResponse.json({ error: "Already on that plan" }, { status: 400 });
   }
 
@@ -93,10 +98,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Could not update the subscription at the gateway" }, { status: 502 });
   }
 
-  const isUpgrade = TIER_ORDER[tier] > TIER_ORDER[currentTier];
+  // Upgrade: switch features now. Back to the active tier: cancel the pending
+  // downgrade. Lower than active: schedule the downgrade for the period end.
+  const isUpgrade = TIER_ORDER[tier] > TIER_ORDER[activeTier];
+  const cancelledDowngrade = tier === activeTier;
   const update: { subscription_tier?: Tier; pending_tier?: Tier | null } = isUpgrade
     ? { subscription_tier: tier, pending_tier: null }
-    : { pending_tier: tier };
+    : cancelledDowngrade
+      ? { pending_tier: null }
+      : { pending_tier: tier };
   const { error: updErr } = await supabaseAdmin
     .from("organisations")
     .update(update)
@@ -110,6 +120,7 @@ export async function POST(req: Request) {
     ok: true,
     effectiveAt: org.subscription_period_end ?? null,
     isUpgrade,
+    cancelledDowngrade,
     newAmountZar: PLAN_PRICES_ZAR[tier],
   });
 }

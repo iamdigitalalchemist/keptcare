@@ -44,37 +44,96 @@ const PAYFAST_VALID_HOSTS = [
   "w2w.payfast.co.za",
 ];
 
+// Checkout attributes in the order PayFast's attribute reference lists them.
+// PayFast recomputes the checkout signature in THIS order, regardless of the
+// order the form posts them, so the signature must be built in it too. Taken
+// from the official SDK (payfast-php-sdk lib/Auth.php generateSignature).
+export const CHECKOUT_FIELD_ORDER = [
+  "merchant_id",
+  "merchant_key",
+  "return_url",
+  "cancel_url",
+  "notify_url",
+  "notify_method",
+  "name_first",
+  "name_last",
+  "email_address",
+  "cell_number",
+  "m_payment_id",
+  "amount",
+  "item_name",
+  "item_description",
+  "custom_int1",
+  "custom_int2",
+  "custom_int3",
+  "custom_int4",
+  "custom_int5",
+  "custom_str1",
+  "custom_str2",
+  "custom_str3",
+  "custom_str4",
+  "custom_str5",
+  "email_confirmation",
+  "confirmation_address",
+  "currency",
+  "payment_method",
+  "subscription_type",
+  "billing_date",
+  "recurring_amount",
+  "frequency",
+  "cycles",
+  "subscription_notify_email",
+  "subscription_notify_webhook",
+  "subscription_notify_buyer",
+] as const;
+
 /**
- * Build the PayFast signature for a set of parameters.
+ * Build the signature for a checkout (hosted payment page) request.
  *
- * PayFast rules: take the parameters in the exact order they will be posted,
- * skip the `signature` field itself, URL-encode each value (spaces as `+`,
- * uppercase percent-encoding), join as `key=value&...`, append the passphrase
- * if set, then MD5.
+ * PayFast rules: take the known attributes in documented order (see
+ * CHECKOUT_FIELD_ORDER — NOT insertion order), skip blank values, trim and
+ * URL-encode each value like PHP urlencode, join as `key=value&...`, append
+ * the passphrase if set, then MD5. Unknown keys are not signed.
  */
 export function buildSignature(
   params: Record<string, string | number | undefined>,
   passphrase?: string,
 ): string {
   const pairs: string[] = [];
-  for (const [key, value] of Object.entries(params)) {
-    if (key === "signature") continue;
-    if (value === undefined || value === null || value === "") continue;
-    pairs.push(`${key}=${encodeValue(String(value))}`);
+  for (const key of CHECKOUT_FIELD_ORDER) {
+    const value = params[key];
+    if (value === undefined || value === null || String(value).trim() === "") continue;
+    pairs.push(`${key}=${encodeValue(String(value).trim())}`);
   }
   let base = pairs.join("&");
-  if (passphrase && passphrase.length > 0) {
-    base += `&passphrase=${encodeValue(passphrase)}`;
+  if (passphrase && passphrase.trim().length > 0) {
+    base += `&passphrase=${encodeValue(passphrase.trim())}`;
   }
   return crypto.createHash("md5").update(base).digest("hex");
 }
 
-// PayFast expects application/x-www-form-urlencoded encoding: spaces as "+" and
-// uppercase hex. encodeURIComponent produces lowercase hex and %20 for spaces.
+/**
+ * The ITN parameter string: every posted field in the order received, blanks
+ * INCLUDED and values untrimmed, stopping at `signature`. This differs from
+ * the checkout rules — PayFast posts empty fields (custom_str3, name_first,
+ * ...) on the ITN and signs them. Also the body for the server postback.
+ */
+export function itnParamString(data: Record<string, string>): string {
+  const pairs: string[] = [];
+  for (const [key, value] of Object.entries(data)) {
+    if (key === "signature") break;
+    pairs.push(`${key}=${encodeValue(value)}`);
+  }
+  return pairs.join("&");
+}
+
+// Match PHP urlencode, which PayFast uses server-side: everything except
+// [A-Za-z0-9-_.] is percent-encoded with uppercase hex, and spaces become "+".
+// encodeURIComponent leaves !'()*~ alone and uses %20 for spaces.
 function encodeValue(value: string): string {
-  return encodeURIComponent(value.trim())
+  return encodeURIComponent(value)
     .replace(/%20/g, "+")
-    .replace(/[!'()*]/g, (c) => "%" + c.charCodeAt(0).toString(16).toUpperCase());
+    .replace(/[!'()*~]/g, (c) => "%" + c.charCodeAt(0).toString(16).toUpperCase());
 }
 
 /**
@@ -87,8 +146,11 @@ export function validSignature(
 ): boolean {
   const received = data.signature;
   if (!received) return false;
-  // ITN preserves field order as posted; rebuild from the received data minus signature.
-  const expected = buildSignature(data, passphrase);
+  let base = itnParamString(data);
+  if (passphrase && passphrase.trim().length > 0) {
+    base += `&passphrase=${encodeValue(passphrase.trim())}`;
+  }
+  const expected = crypto.createHash("md5").update(base).digest("hex");
   return timingSafeEqualHex(received, expected);
 }
 
@@ -140,7 +202,7 @@ export async function validSourceIp(remoteIp: string | null): Promise<boolean> {
 export async function validServerConfirmation(
   data: Record<string, string>,
 ): Promise<boolean> {
-  const body = new URLSearchParams(data).toString();
+  const body = itnParamString(data);
   const res = await fetch(PAYFAST_HOSTS.validate, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -173,10 +235,10 @@ export function validAmount(
   return Math.abs(paid - expectedZar) < 0.01;
 }
 
-// --- PayFast subscription-management API (for cancelling a token) ---
+// --- PayFast subscription-management API ---
 // This API signs differently to the checkout: build an MD5 over ALL header
-// fields plus any body params, sorted alphabetically by key, URL-encoded, with
-// the passphrase appended. See https://developers.payfast.co.za/api
+// fields plus any body params, with the passphrase added as a field, sorted
+// alphabetically by key, URL-encoded. See https://developers.payfast.co.za/api
 
 // Same host in sandbox and live; sandbox is selected via the testing=true query param.
 export const PAYFAST_API_BASE = "https://api.payfast.co.za";

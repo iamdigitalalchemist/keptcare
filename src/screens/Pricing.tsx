@@ -135,7 +135,12 @@ export default function Pricing() {
       return;
     }
     await refreshSubscription();
-    if (body.isUpgrade) {
+    if (body.cancelledDowngrade) {
+      toast({
+        title: "Downgrade cancelled",
+        description: `You'll stay on ${plans.find((p) => p.tier === tier)?.name}.`,
+      });
+    } else if (body.isUpgrade) {
       toast({
         title: `Welcome to ${plans.find((p) => p.tier === tier)?.name}!`,
         description: `New price of R${body.newAmountZar.toLocaleString("en-ZA")}/month applies from your next billing date.`,
@@ -283,9 +288,11 @@ export default function Pricing() {
                     ? "Current plan"
                     : isPending
                       ? `Switches on ${periodEnd ?? "next billing date"}`
-                      : "Subscribe"}
+                      : plan.tier === currentTier
+                        ? `Keep ${plan.name}`
+                        : "Subscribe"}
                 </Button>
-                {isCurrent && pendingTier && (
+                {plan.tier === currentTier && pendingTier && (
                   <p className="text-xs text-muted-foreground mt-2 text-center">
                     Switching to {plans.find((p) => p.tier === pendingTier)?.name} on {periodEnd}
                   </p>

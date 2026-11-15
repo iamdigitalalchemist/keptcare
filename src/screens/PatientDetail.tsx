@@ -49,7 +49,7 @@ export default function PatientDetail() {
   const { id } = useParams();
   const router = useRouter();
   const { data, isLoading, organisationId } = usePracticeData();
-  const { organisation, limits } = useSubscription();
+  const { organisation, limits, canSendOn } = useSubscription();
   const { updatePatient, deletePatient } = usePracticeMutations();
   const [editOpen, setEditOpen] = useState(false);
   const [messageChannel, setMessageChannel] = useState<MessageChannel | null>(null);
@@ -123,9 +123,13 @@ export default function PatientDetail() {
                       ["whatsapp", "WhatsApp", MessageCircle],
                       ["email", "Email", Mail],
                     ] as const).map(([channel, label, Icon]) => {
-                      const reason = limits.channels.includes(channel)
-                        ? blockedReason(patient, channel)
-                        : `${label} is not on your plan`;
+                      const reason = !limits.channels.includes(channel)
+                        ? `${label} is not on your plan`
+                        : !canSendOn(channel)
+                          ? channel === "email"
+                            ? "Your subscription is not active"
+                            : `${label} needs an active paid plan (not available during the trial)`
+                          : blockedReason(patient, channel);
                       return (
                         <Button
                           key={channel}

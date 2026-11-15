@@ -2,19 +2,29 @@ import { buildApiSignature, PAYFAST_API_BASE, SANDBOX } from "@/lib/payfast";
 
 // Thin client for PayFast's subscription-management API (api.payfast.co.za).
 // Used to anchor a new subscription's first charge to the trial end
-// (PUT next_run) and to change the billed amount on upgrade/downgrade.
-// Auth: merchant-id / version / timestamp headers + MD5 signature.
+// (PATCH /update run_date), to change the billed amount on upgrade/downgrade,
+// and to cancel. Endpoints and signing mirror the official SDK
+// (payfast-php-sdk lib/Services/Subscriptions.php, lib/Request.php).
+// Auth: merchant-id / version / timestamp headers + MD5 signature over the
+// headers AND body fields.
 
-function authHeaders(): Record<string, string> {
+// PHP date("Y-m-d\TH:i:sO"), as the SDK sends: 2026-10-12T08:30:00+0000.
+function apiTimestamp(): string {
+  return `${new Date().toISOString().slice(0, 19)}+0000`;
+}
+
+function authHeaders(body?: Record<string, string | number>): Record<string, string> {
   const merchantId = process.env.PAYFAST_MERCHANT_ID;
   const passphrase = process.env.PAYFAST_PASSPHRASE;
   if (!merchantId) throw new Error("Billing is not configured");
   const headers: Record<string, string> = {
     "merchant-id": merchantId,
     version: "v1",
-    timestamp: new Date().toISOString(),
+    timestamp: apiTimestamp(),
   };
-  return { ...headers, signature: buildApiSignature(headers, passphrase) };
+  const signed: Record<string, string> = { ...headers };
+  for (const [k, v] of Object.entries(body ?? {})) signed[k] = String(v);
+  return { ...headers, signature: buildApiSignature(signed, passphrase) };
 }
 
 /**
@@ -22,7 +32,7 @@ function authHeaders(): Record<string, string> {
  * signature per the API spec (sorted, URL-encoded). Returns true on 2xx.
  */
 export async function payfastApiRequest(
-  method: "PUT" | "GET" | "DELETE",
+  method: "PUT" | "PATCH" | "GET",
   path: string,
   body?: Record<string, string | number>,
 ): Promise<{ ok: boolean; status: number; text: string }> {
@@ -30,7 +40,7 @@ export async function payfastApiRequest(
   const res = await fetch(url, {
     method,
     headers: {
-      ...authHeaders(),
+      ...authHeaders(body),
       ...(body ? { "content-type": "application/json" } : {}),
     },
     ...(body ? { body: JSON.stringify(body) } : {}),
@@ -42,21 +52,21 @@ export async function payfastApiRequest(
 /** Set the date of the subscription's next (and then monthly) charge. */
 export async function setSubscriptionNextRun(
   token: string,
-  nextRun: string, // YYYY-MM-DD
+  runDate: string, // YYYY-MM-DD
 ): Promise<boolean> {
-  const r = await payfastApiRequest("PUT", `/subscriptions/${encodeURIComponent(token)}`, {
-    next_run: nextRun,
+  const r = await payfastApiRequest("PATCH", `/subscriptions/${encodeURIComponent(token)}/update`, {
+    run_date: runDate,
   });
-  if (!r.ok) console.error("[payfast] set next_run failed", r.status, r.text);
+  if (!r.ok) console.error("[payfast] set run_date failed", r.status, r.text);
   return r.ok;
 }
 
-/** Change the subscription's recurring amount (cents). Takes effect at next_run. */
+/** Change the subscription's recurring amount (cents). Takes effect at the next run. */
 export async function setSubscriptionAmount(
   token: string,
   amountCents: number,
 ): Promise<boolean> {
-  const r = await payfastApiRequest("PUT", `/subscriptions/${encodeURIComponent(token)}`, {
+  const r = await payfastApiRequest("PATCH", `/subscriptions/${encodeURIComponent(token)}/update`, {
     amount: amountCents,
   });
   if (!r.ok) console.error("[payfast] set amount failed", r.status, r.text);
