@@ -238,9 +238,9 @@ export default function Terms() {
             <p>
               KeptCare (Pty) Ltd
               <br />
-              Email: <a href="mailto:legal@keptcare.co.za">legal@keptcare.co.za</a>
+              Email: <a href="mailto:legal@kept-care.co.za">legal@kept-care.co.za</a>
               <br />
-              Website: <a href="https://www.keptcare.co.za">www.keptcare.co.za</a>
+              Website: <a href="https://www.kept-care.co.za">www.kept-care.co.za</a>
             </p>
           </section>
 
@@ -297,7 +297,7 @@ export default function Terms() {
             </p>
             <p>
               5.2 Refund requests on this basis must be submitted in writing to{" "}
-              <a href="mailto:billing@keptcare.co.za">billing@keptcare.co.za</a> within 14 days of
+              <a href="mailto:billing@kept-care.co.za">billing@kept-care.co.za</a> within 14 days of
               the incident.
             </p>
 
@@ -320,7 +320,7 @@ export default function Terms() {
               <li>Logging into their account and selecting Settings → Subscription → Cancel Plan, or</li>
               <li>
                 Sending a written cancellation request to{" "}
-                <a href="mailto:support@keptcare.co.za">support@keptcare.co.za</a> from the
+                <a href="mailto:support@kept-care.co.za">support@kept-care.co.za</a> from the
                 registered account email address.
               </li>
             </ul>
@@ -434,7 +434,7 @@ export default function Terms() {
             <h3>5. Support</h3>
             <p>5.1 Technical support is available to all paid Subscribers via:</p>
             <ul>
-              <li>Email: <a href="mailto:support@keptcare.co.za">support@keptcare.co.za</a></li>
+              <li>Email: <a href="mailto:support@kept-care.co.za">support@kept-care.co.za</a></li>
               <li>In-platform live chat during business hours (Monday to Friday, 08:00–17:00 SAST)</li>
             </ul>
             <p>
@@ -450,14 +450,14 @@ export default function Terms() {
             <p>
               6.2 Subscribers outside South Africa may be subject to different billing currencies
               and localised onboarding support. Contact{" "}
-              <a href="mailto:sales@keptcare.co.za">sales@keptcare.co.za</a> for regional pricing.
+              <a href="mailto:sales@kept-care.co.za">sales@kept-care.co.za</a> for regional pricing.
             </p>
           </section>
 
           <p className="mt-16 text-sm border-t border-border pt-8">
             These policies should be read together with the KeptCare Terms and Conditions and
             Privacy Policy. For any queries contact{" "}
-            <a href="mailto:legal@keptcare.co.za">legal@keptcare.co.za</a>.
+            <a href="mailto:legal@kept-care.co.za">legal@kept-care.co.za</a>.
           </p>
         </div>
       </div>

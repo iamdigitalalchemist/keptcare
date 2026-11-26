@@ -2,24 +2,26 @@
 
 import { supabase } from "@/integrations/supabase/client";
 
-export interface SendSmsInput {
+export interface SendMessageInput {
+  channel: "sms" | "whatsapp" | "email";
   patientId: string;
   message?: string;
+  subject?: string;
   templateId?: string;
   variables?: Record<string, string>;
 }
 
-export type SendSmsResult = { ok: true } | { ok: false; error: string };
+export type SendMessageResult = { ok: true } | { ok: false; error: string };
 
-// Sends an SMS to a patient via /api/sms/send, which relays through Twilio
+// Sends a patient message via /api/messages/send, which relays through Sendexa
 // and records the attempt in communication_logs. The caller's Supabase access
 // token authorizes the request (same pattern as startPayFastCheckout).
-export async function sendPatientSms(input: SendSmsInput): Promise<SendSmsResult> {
+export async function sendPatientMessage(input: SendMessageInput): Promise<SendMessageResult> {
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token;
   if (!token) return { ok: false, error: "Please sign in again." };
 
-  const res = await fetch("/api/sms/send", {
+  const res = await fetch("/api/messages/send", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -29,8 +31,8 @@ export async function sendPatientSms(input: SendSmsInput): Promise<SendSmsResult
   });
 
   if (!res.ok) {
-    const { error } = await res.json().catch(() => ({ error: "Failed to send SMS" }));
-    return { ok: false, error: error ?? "Failed to send SMS" };
+    const { error } = await res.json().catch(() => ({ error: "Failed to send message" }));
+    return { ok: false, error: error ?? "Failed to send message" };
   }
 
   return { ok: true };

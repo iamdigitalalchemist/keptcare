@@ -58,6 +58,14 @@ interface PlatformOverview {
   members: PlatformMember[];
 }
 
+interface DemoRequest {
+  id: string;
+  name: string;
+  email: string;
+  mobile: string;
+  created_at: string;
+}
+
 type SubscriptionState = PlatformOrganisation["subscription_state"];
 
 const TIER_LABELS = {
@@ -88,6 +96,7 @@ export default function AdminPage() {
   const { isPlatformAdmin, loading } = useSubscription();
   const router = useRouter();
   const [overview, setOverview] = useState<PlatformOverview | null>(null);
+  const [demoRequests, setDemoRequests] = useState<DemoRequest[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [search, setSearch] = useState("");
   const [stateFilter, setStateFilter] = useState<SubscriptionState | "all">("all");
@@ -95,7 +104,11 @@ export default function AdminPage() {
   useEffect(() => {
     if (!isPlatformAdmin) return;
     const fetchAll = async () => {
-      const { data, error } = await (supabase as any).rpc("get_platform_admin_overview");
+      const [{ data, error }, demos] = await Promise.all([
+        (supabase as any).rpc("get_platform_admin_overview"),
+        (supabase as any).from("demo_requests").select("*").order("created_at", { ascending: false }),
+      ]);
+      if (!demos.error && demos.data) setDemoRequests(demos.data);
       if (!error && data) {
         setOverview({
           summary: data.summary || {
@@ -234,6 +247,7 @@ export default function AdminPage() {
         <TabsList>
           <TabsTrigger value="organisations">Organisations</TabsTrigger>
           <TabsTrigger value="members">Members</TabsTrigger>
+          <TabsTrigger value="demo-requests">Demo requests</TabsTrigger>
         </TabsList>
 
         <TabsContent value="organisations" className="space-y-4 mt-4">
@@ -384,6 +398,45 @@ export default function AdminPage() {
                           <Badge variant="outline" className="capitalize">{member.status}</Badge>
                         </TableCell>
                         <TableCell>{format(new Date(member.created_at), "MMM d, yyyy")}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="demo-requests" className="space-y-4 mt-4">
+          <Card>
+            <CardHeader className="space-y-3 pb-2">
+              <CardTitle className="text-base">Demo requests</CardTitle>
+              <p className="text-xs text-muted-foreground">{demoRequests.length} requests from the landing page</p>
+            </CardHeader>
+            <CardContent>
+              {loadingData ? (
+                <p className="text-sm text-muted-foreground">Loading…</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Mobile</TableHead>
+                      <TableHead>Requested</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {demoRequests.map((demo) => (
+                      <TableRow key={demo.id}>
+                        <TableCell className="font-medium">{demo.name}</TableCell>
+                        <TableCell>
+                          <a href={`mailto:${demo.email}`} className="hover:text-primary transition-colors">{demo.email}</a>
+                        </TableCell>
+                        <TableCell>
+                          <a href={`tel:${demo.mobile.replace(/[^\d+]/g, "")}`} className="hover:text-primary transition-colors">{demo.mobile}</a>
+                        </TableCell>
+                        <TableCell>{format(new Date(demo.created_at), "MMM d, yyyy HH:mm")}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

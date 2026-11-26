@@ -27,7 +27,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Reveal } from "@/components/home/Reveal";
-import { AuthCta, NavSignIn, PlanCta } from "@/components/home/HomeCtas";
+import { AuthCta, NavBookDemo, NavSignIn, PlanCta } from "@/components/home/HomeCtas";
 
 // Server component: all copy and layout render as static HTML. The only client
 // JS on this page is the Reveal scroll wrapper and the auth-aware CTAs.
@@ -55,13 +55,15 @@ const features = [
     icon: Bot,
     title: "Automations",
     description:
-      "Set-and-forget recall rules: no visit in 6 months, missed appointment, check-up due — KeptCare reaches out automatically.",
+      "Set-and-forget recall rules: no visit in 6 months, missed appointment, check-up due — KeptCare will reach out automatically.",
+    soon: true,
   },
   {
     icon: Megaphone,
     title: "Campaigns",
     description:
-      "One-off pushes to a whole segment — reactivations, seasonal check-ups, announcements — with open and delivery tracking.",
+      "One-off pushes to a whole segment — reactivations, seasonal check-ups, announcements — with delivery stats per campaign.",
+    soon: true,
   },
   {
     icon: MessageSquare,
@@ -86,6 +88,7 @@ const features = [
     title: "Alerts",
     description:
       "Get nudged when a high-value patient goes quiet or a campaign needs attention, before it costs you a booking.",
+    soon: true,
   },
 ];
 
@@ -100,9 +103,9 @@ const steps = [
   {
     icon: Zap,
     step: "02",
-    title: "Switch on automations",
+    title: "Set up your messages",
     description:
-      "Pick your recall rules and message templates. Reminders and follow-ups go out on schedule — no admin required.",
+      "Create message templates and send reminders by SMS, email or WhatsApp in one click. Scheduled automatic recalls are coming soon.",
   },
   {
     icon: HeartPulse,
@@ -120,8 +123,8 @@ const plans = [
     description: "For solo practitioners getting started",
     features: [
       "Up to 200 patients",
-      "2 automation rules",
-      "Email reminders only",
+      "2 automation rules (coming soon)",
+      "Email messaging",
       "Basic reporting",
       "1 user seat",
     ],
@@ -133,9 +136,9 @@ const plans = [
     description: "For growing practices",
     features: [
       "Up to 1,000 patients",
-      "10 automation rules",
-      "SMS + Email reminders",
-      "Campaign messaging",
+      "10 automation rules (coming soon)",
+      "SMS + Email messaging",
+      "Campaign messaging (coming soon)",
       "Advanced reporting",
       "3 user seats",
       "Message templates",
@@ -148,13 +151,13 @@ const plans = [
     description: "For established multi-location practices",
     features: [
       "Unlimited patients",
-      "Unlimited automation rules",
+      "Unlimited automation rules (coming soon)",
       "SMS + Email + WhatsApp",
-      "Campaign messaging",
+      "Campaign messaging (coming soon)",
       "Full analytics suite",
       "Unlimited user seats",
       "Custom templates",
-      "API access",
+      "API access (coming soon)",
       "Priority support",
     ],
     popular: false,
@@ -170,7 +173,7 @@ const faqs = [
   {
     question: "Which messaging channels are supported?",
     answer:
-      "SMS, email and WhatsApp, depending on your plan. SMS is delivered through Twilio with per-message delivery tracking, and every send is logged against the patient's record.",
+      "SMS, email and WhatsApp, depending on your plan. Each message is sent from the patient's record, its delivery status is tracked, and every send is logged against the patient.",
   },
   {
     question: "Can I import my existing patient list?",
@@ -185,7 +188,7 @@ const faqs = [
   {
     question: "Can my whole team use it?",
     answer:
-      "Yes. Invite teammates by email and control what each person can see and do with fine-grained roles — front desk, practitioners, and admins all get the right level of access.",
+      "Yes. Invite teammates with a secure invite link and control what each person can see and do with fine-grained roles — front desk, practitioners, and admins all get the right level of access.",
   },
   {
     question: "Can I cancel anytime?",
@@ -198,7 +201,7 @@ const highlights = [
   { value: "3", label: "messaging channels" },
   { value: "14 days", label: "free trial" },
   { value: "<30 min", label: "typical setup time" },
-  { value: "Unlimited", label: "recall automations on Pro" },
+  { value: "Unlimited", label: "patients on Pro" },
 ];
 
 const channels = [
@@ -207,7 +210,7 @@ const channels = [
     name: "SMS",
     color: "text-info bg-info/10",
     blurb:
-      "Twilio-powered texts with real-time delivery status — the channel with the highest open rates in healthcare.",
+      "Texts with real-time delivery status — the channel with the highest open rates in healthcare.",
     sample: "Hi {{patient_name}}, your check-up with {{practice_name}} is due. Reply YES to book.",
   },
   {
@@ -215,7 +218,7 @@ const channels = [
     name: "Email",
     color: "text-primary bg-primary/10",
     blurb:
-      "Rich reminders, recall letters and newsletters with open tracking, from your practice's name.",
+      "Reminders, recall letters and newsletters, sent from your practice's own email address.",
     sample: "Subject: Time for your 6-month check-up, {{first_name}}",
   },
   {
@@ -223,7 +226,7 @@ const channels = [
     name: "WhatsApp",
     color: "text-success bg-success/10",
     blurb:
-      "Meet patients in the app they use all day — perfect for confirmations and two-way conversations.",
+      "Meet patients in the app they use all day — ideal for appointment confirmations and reminders.",
     sample: "Your appointment is confirmed for {{appointment_date}} ✅",
   },
 ];
@@ -258,7 +261,7 @@ function ProductMockup() {
           <span className="h-2.5 w-2.5 rounded-full bg-white/15" />
           <span className="h-2.5 w-2.5 rounded-full bg-white/15" />
           <span className="h-2.5 w-2.5 rounded-full bg-white/15" />
-          <span className="ml-3 text-[11px] text-white/40 font-mono">keptcare · dashboard</span>
+          <span className="ml-3 text-[11px] text-white/40 font-mono">keptcare · example dashboard</span>
         </div>
 
         <div className="p-5 space-y-4">
@@ -354,7 +357,7 @@ export default function Home() {
           </nav>
           <div className="flex items-center gap-2.5">
             <NavSignIn />
-            <AuthCta className="shadow-lg shadow-primary/25" />
+            <NavBookDemo className="shadow-lg shadow-primary/25" />
           </div>
         </div>
       </header>
@@ -408,9 +411,9 @@ export default function Home() {
               className="animate-home-fade-up mt-5 text-lg text-white/60 leading-relaxed"
               style={{ animationDelay: "160ms" }}
             >
-              KeptCare turns your patient list into repeat bookings — automated recalls, SMS &
-              WhatsApp reminders, campaigns and loyalty, all from one dashboard built for
-              healthcare practices.
+              KeptCare turns your patient list into repeat bookings — SMS, email &amp; WhatsApp
+              reminders, patient segments and loyalty, all from one dashboard built for
+              healthcare practices. Automated recalls and campaigns are coming soon.
             </p>
 
             <div
@@ -478,7 +481,12 @@ export default function Home() {
                 <div className="h-11 w-11 rounded-xl bg-accent flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                   <f.icon className="h-5 w-5 text-accent-foreground" />
                 </div>
-                <h3 className="font-semibold text-foreground">{f.title}</h3>
+                <h3 className="font-semibold text-foreground flex items-center gap-2">
+                  {f.title}
+                  {"soon" in f && f.soon && (
+                    <Badge variant="secondary" className="rounded-full px-2 py-0 text-[10px] font-medium">Coming soon</Badge>
+                  )}
+                </h3>
                 <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{f.description}</p>
               </Reveal>
             ))}

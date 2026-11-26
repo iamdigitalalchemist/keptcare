@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./AuthContext";
 import { TIER_LIMITS, type TierLimit } from "@/lib/limits";
-import { canSendSms as orgCanSendSms, hasPaidAccess } from "@/lib/access";
+import { canSendOn as orgCanSendOn, canSendSms as orgCanSendSms, hasPaidAccess, type MessageChannel } from "@/lib/access";
 
 type Tier = "starter" | "growth" | "pro";
 
@@ -60,6 +60,8 @@ interface SubscriptionContextType {
   pendingTier: Tier | null;
   /** Whether the org may send SMS (paid Growth/Pro; never Starter or the trial). */
   canSendSms: boolean;
+  /** Whether the org may send on a channel (tier includes it; SMS/WhatsApp need paid access). Mirrors /api/messages/send. */
+  canSendOn: (channel: MessageChannel) => boolean;
   refreshSubscription: () => Promise<void>;
   refreshOrganisationAuth: () => Promise<void>;
 }
@@ -97,6 +99,7 @@ const SubscriptionContext = createContext<SubscriptionContextType>({
   limits: TIER_LIMITS.starter,
   pendingTier: null,
   canSendSms: false,
+  canSendOn: () => false,
   refreshSubscription: async () => {},
   refreshOrganisationAuth: async () => {},
 });
@@ -184,8 +187,9 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     trial_ends_at: trialEndsAt?.toISOString() ?? null,
   });
   const isSubscriptionActive = isPaidActive || isTrialActive;
-  // Mirrors the /api/sms/send gate: paid Growth/Pro only, never the trial.
+  // Mirrors the /api/messages/send gate (src/lib/access.ts).
   const canSendSms = !!organisation && orgCanSendSms(organisation);
+  const canSendOn = (channel: MessageChannel) => !!organisation && orgCanSendOn(organisation, channel);
   const isOrgAdmin = membership?.role?.key === "org_admin";
   const isAdmin = isPlatformAdmin;
 
@@ -195,8 +199,8 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   };
 
   const canAccess = (feature: Feature): boolean => {
-    if (!isSubscriptionActive) return false;
     if (isPlatformAdmin) return true;
+    if (!isSubscriptionActive) return false;
     return TIER_FEATURES[tier].includes(feature);
   };
 
@@ -220,6 +224,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         limits: TIER_LIMITS[tier],
         pendingTier: (organisation?.pending_tier as Tier | null) ?? null,
         canSendSms,
+        canSendOn,
         refreshSubscription: fetchSubscription,
         refreshOrganisationAuth: fetchSubscription,
       }}

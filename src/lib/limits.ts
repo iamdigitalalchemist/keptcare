@@ -21,6 +21,11 @@ export const TIER_LIMITS: Record<Tier, TierLimit> = {
 
 export const UNLIMITED = Number.POSITIVE_INFINITY;
 
+// shortcut: one flat cap for every plan (issue #25 cites 500/24h); make it per-tier
+// with included credits once pricing for messaging is decided.
+/** Max messages an organisation can send in any rolling 24 hours, all channels. */
+export const DAILY_MESSAGE_CAP = 500;
+
 /** Human-readable limit for tooltips/messages, e.g. "1,000" or "Unlimited". */
 export function limitLabel(value: number): string {
   return value === UNLIMITED ? "Unlimited" : value.toLocaleString("en-ZA");

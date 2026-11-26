@@ -25,9 +25,13 @@ import { toast } from "sonner";
 import { MessageSquareWarning } from "lucide-react";
 import type { MessageTemplate, Patient } from "@/lib/types";
 import { renderTemplate } from "@/lib/render-template";
-import { sendPatientSms } from "@/lib/send-sms";
+import { sendPatientMessage } from "@/lib/send-message";
 
 const FREE_FORM = "free-form";
+
+export type MessageChannel = "sms" | "whatsapp" | "email";
+
+const LABEL: Record<MessageChannel, string> = { sms: "SMS", whatsapp: "WhatsApp", email: "Email" };
 
 // Message parts are ~160 GSM-7 chars (70 for UCS-2); good enough as a guide.
 function smsParts(text: string) {
@@ -36,29 +40,44 @@ function smsParts(text: string) {
   return len <= 160 ? 1 : Math.ceil(len / 153);
 }
 
-interface SendSmsDialogProps {
+/** Why this patient can't be messaged on this channel, or null if they can. */
+export function blockedReason(patient: Patient, channel: MessageChannel): string | null {
+  const consent = { sms: patient.consentSms, whatsapp: patient.consentWhatsapp, email: patient.consentEmail }[channel];
+  if (!consent) return `Patient has not consented to ${LABEL[channel]}`;
+  if (channel === "email" ? !patient.email : !patient.phone) {
+    return channel === "email" ? "No email address on file" : "No phone number on file";
+  }
+  return null;
+}
+
+interface SendMessageDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  channel: MessageChannel;
   patient: Patient;
-  /** All message templates; SMS-channel ones are offered in the picker. */
+  /** All message templates; ones matching `channel` are offered in the picker. */
   templates: MessageTemplate[];
   practiceName: string;
   organisationId: string | null;
 }
 
-export function SendSmsDialog({ open, onOpenChange, patient, templates, practiceName, organisationId }: SendSmsDialogProps) {
+export function SendMessageDialog({ open, onOpenChange, channel, patient, templates, practiceName, organisationId }: SendMessageDialogProps) {
   const queryClient = useQueryClient();
-  const smsTemplates = useMemo(
-    () => templates.filter((t) => t.channel === "sms"),
-    [templates],
+  const label = LABEL[channel];
+  // WhatsApp can only open a conversation with an approved Meta template.
+  const templateOnly = channel === "whatsapp";
+  const channelTemplates = useMemo(
+    () => templates.filter((t) => t.channel === channel),
+    [templates, channel],
   );
 
   const [source, setSource] = useState<string>(FREE_FORM);
   const [message, setMessage] = useState("");
+  const [subject, setSubject] = useState("");
   const [customVariables, setCustomVariables] = useState<Record<string, string>>({});
   const [sending, setSending] = useState(false);
 
-  const selectedTemplate = smsTemplates.find((t) => t.id === source);
+  const selectedTemplate = channelTemplates.find((t) => t.id === source);
 
   // Auto-filled by the server too; filled here as well so the preview matches.
   const autoVariables = useMemo(
@@ -75,8 +94,8 @@ export function SendSmsDialog({ open, onOpenChange, patient, templates, practice
     if (selectedTemplate) {
       return renderTemplate(selectedTemplate.body, { ...autoVariables, ...customVariables });
     }
-    return message;
-  }, [selectedTemplate, message, autoVariables, customVariables]);
+    return templateOnly ? "" : message;
+  }, [selectedTemplate, templateOnly, message, autoVariables, customVariables]);
 
   // Custom variables the template declares beyond the auto-filled ones.
   const extraVariables = useMemo(
@@ -87,27 +106,29 @@ export function SendSmsDialog({ open, onOpenChange, patient, templates, practice
     [selectedTemplate, autoVariables],
   );
 
+  const blocked = blockedReason(patient, channel);
   const canSend =
     !sending &&
-    patient.consentSms &&
-    Boolean(patient.phone) &&
+    !blocked &&
     preview.trim().length > 0 &&
     (!selectedTemplate || extraVariables.every((name) => customVariables[name]?.trim()));
 
   const reset = () => {
     setSource(FREE_FORM);
     setMessage("");
+    setSubject("");
     setCustomVariables({});
   };
 
   const handleSend = async () => {
     if (!canSend) return;
     setSending(true);
-    const result = await sendPatientSms({
+    const result = await sendPatientMessage({
+      channel,
       patientId: patient.id,
       ...(selectedTemplate
         ? { templateId: selectedTemplate.id, variables: customVariables }
-        : { message: preview.trim() }),
+        : { message: preview.trim(), subject: subject.trim() || undefined }),
     });
     setSending(false);
 
@@ -116,7 +137,7 @@ export function SendSmsDialog({ open, onOpenChange, patient, templates, practice
       return;
     }
 
-    toast.success(`SMS sent to ${patient.firstName} ${patient.lastName}.`);
+    toast.success(`${label} sent to ${patient.firstName} ${patient.lastName}.`);
     reset();
     onOpenChange(false);
     if (organisationId) {
@@ -134,42 +155,45 @@ export function SendSmsDialog({ open, onOpenChange, patient, templates, practice
     >
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Send SMS</DialogTitle>
+          <DialogTitle>Send {label}</DialogTitle>
           <DialogDescription>
-            To {patient.firstName} {patient.lastName} at {patient.phone || "—"}
+            To {patient.firstName} {patient.lastName} at {(channel === "email" ? patient.email : patient.phone) || "—"}
           </DialogDescription>
         </DialogHeader>
 
-        {!patient.consentSms && (
+        {blocked && (
           <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
             <MessageSquareWarning className="h-4 w-4 mt-0.5 flex-shrink-0" />
-            This patient has not consented to SMS. Enable SMS consent by editing the patient before sending.
-          </div>
-        )}
-        {patient.consentSms && !patient.phone && (
-          <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            <MessageSquareWarning className="h-4 w-4 mt-0.5 flex-shrink-0" />
-            This patient has no phone number on file. Add one by editing the patient.
+            {blocked}. Edit the patient to fix this before sending.
           </div>
         )}
 
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="sms-source">Message source</Label>
+            <Label htmlFor="msg-source">{templateOnly ? "Template" : "Message source"}</Label>
             <Select value={source} onValueChange={setSource}>
-              <SelectTrigger id="sms-source">
-                <SelectValue />
+              <SelectTrigger id="msg-source">
+                <SelectValue placeholder="Choose a template" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={FREE_FORM}>Write a message</SelectItem>
-                {smsTemplates.map((t) => (
+                {templateOnly ? (
+                  <SelectItem value={FREE_FORM} disabled>Choose a template</SelectItem>
+                ) : (
+                  <SelectItem value={FREE_FORM}>Write a message</SelectItem>
+                )}
+                {channelTemplates.map((t) => (
                   <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            {smsTemplates.length === 0 && (
+            {channelTemplates.length === 0 && (
               <p className="text-xs text-muted-foreground">
-                No SMS templates yet — create one on the Messages page.
+                No {label} templates yet — create one on the Messages page.
+              </p>
+            )}
+            {templateOnly && (
+              <p className="text-xs text-muted-foreground">
+                WhatsApp needs a Meta-approved template; the template name must match the one approved in Sendexa.
               </p>
             )}
           </div>
@@ -196,28 +220,43 @@ export function SendSmsDialog({ open, onOpenChange, patient, templates, practice
                 </div>
               </div>
             </>
-          ) : (
-            <div className="space-y-2">
-              <Label htmlFor="sms-message">Message</Label>
-              <Textarea
-                id="sms-message"
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                rows={4}
-                placeholder="Type your SMS here…"
-              />
-            </div>
+          ) : templateOnly ? null : (
+            <>
+              {channel === "email" && (
+                <div className="space-y-2">
+                  <Label htmlFor="msg-subject">Subject</Label>
+                  <Input
+                    id="msg-subject"
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                    placeholder={`Message from ${practiceName}`}
+                  />
+                </div>
+              )}
+              <div className="space-y-2">
+                <Label htmlFor="msg-body">Message</Label>
+                <Textarea
+                  id="msg-body"
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  rows={channel === "email" ? 8 : 4}
+                  placeholder={`Type your ${label} here…`}
+                />
+              </div>
+            </>
           )}
 
-          <p className="text-xs text-muted-foreground text-right">
-            {preview.length} characters{preview.length > 0 && ` · ${smsParts(preview)} SMS part${smsParts(preview) === 1 ? "" : "s"}`}
-          </p>
+          {channel === "sms" && (
+            <p className="text-xs text-muted-foreground text-right">
+              {preview.length} characters{preview.length > 0 && ` · ${smsParts(preview)} SMS part${smsParts(preview) === 1 ? "" : "s"}`}
+            </p>
+          )}
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={handleSend} disabled={!canSend}>
-            {sending ? "Sending…" : "Send SMS"}
+            {sending ? "Sending…" : `Send ${label}`}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -13,10 +13,10 @@ interface FeatureGateProps {
 }
 
 export function FeatureGate({ feature, children, fallbackMessage }: FeatureGateProps) {
-  const { canAccess, isSubscriptionActive, tier } = useSubscription();
+  const { canAccess, isSubscriptionActive, isPlatformAdmin, tier } = useSubscription();
   const router = useRouter();
 
-  if (!isSubscriptionActive) {
+  if (!isSubscriptionActive && !isPlatformAdmin) {
     return (
       <Card className="border-destructive/30">
         <CardContent className="flex flex-col items-center justify-center py-12 text-center space-y-3">

@@ -1,7 +1,7 @@
 # keptcare — TODO
 
 ## Launch blockers
-- [ ] Supabase Auth URL config (Dashboard → Auth → URL Configuration): set Site URL to `https://keptcare.vercel.app` and add redirect URLs for `/dashboard`, `/accept-invite`, `/reset-password` (+ `http://localhost:3000/**` for dev). Fixes welcome/confirmation emails redirecting to `localhost:3000`.
+- [ ] Supabase Auth URL config (Dashboard → Auth → URL Configuration): set Site URL to `https://www.kept-care.co.za` (issue #2) and add redirect URLs for `/dashboard`, `/accept-invite`, `/reset-password` (+ `http://localhost:3000/**` for dev). Fixes welcome/confirmation emails redirecting to `localhost:3000`.
 - [ ] Set real ZAR prices in `PLAN_PRICES_ZAR` (`src/lib/payfast.ts`) — ITN validates paid amounts against these
 - [ ] PayFast go-live env swap on Vercel (live merchant id/key/passphrase, `PAYFAST_SANDBOX=false`) — see "Go-live checklist" in `docs/payfast.md`
 
@@ -12,7 +12,7 @@
 - [x] Billing columns not writable from the browser (column grants)
 - [x] Manager → admin escalation (members/invitations read-only from browser, role checks in RPCs, same-org roles only, no platform.* perms)
 - [x] Tier caps also enforced on re-activation (automations, members)
-- [x] `/api/sms/send`: `communications.write`, paid Growth/Pro only (no Starter, no trial), 500/24h cap; UI button gated
+- [x] `/api/messages/send` (was `/api/sms/send`): `communications.write`, channel must be in the tier, SMS/WhatsApp paid only (no trial), 500/24h cap; UI buttons gated
 - [x] ITN: trial setup period end = trial end; superseded-token ITNs (incl. CANCELLED) recorded but not applied
 - [x] Checkout 409 when a subscription exists; plan change compares against the active tier (downgrade cancel supported)
 - [ ] Legacy prod rows: the 4 test orgs have `subscription_active = true` with no payment (old default). Harmless (no period end ⇒ no paid access) but worth resetting to false.
@@ -20,17 +20,10 @@
 ## Infrastructure
 - [ ] Set up custom domain on Vercel (then update `NEXT_PUBLIC_APP_URL` + Supabase auth URLs)
 
-## SMS (Twilio)
-- [ ] Add Twilio env vars to Vercel Production (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_MESSAGING_SERVICE_SID` or `TWILIO_FROM_NUMBER`) — see `docs/twilio.md`. SID/token are in local `.env`; a sender still needs to be chosen.
-- [x] Wire a "Send SMS" action in the UI (e.g. PatientDetail) to `POST /api/sms/send` — Send SMS button on PatientDetail opens `SendSmsDialog` (free-form or SMS template with live preview, consent/phone gating)
-
-## Done
-- [x] Twilio migration applied to local + hosted DB
-- [x] PayFast migrations applied to local + hosted DB
-- [x] Tier-limits migration (`20260912000000`) pushed to hosted DB — it had been missed; `enforce_tier_limits` is now live in production
-- [x] `subscription_active` default-false migration (`20260914000000`) applied to hosted DB
-- [x] Vercel prod env fixed (Supabase URL/key were empty) + PayFast sandbox creds
-- [x] Subscription expiry enforcement (`subscription_period_end` + 3-day grace)
-- [x] Mandatory card-capture gate (ProtectedRoute) — no app access without a `payfast_token`; `TrialCardBanner` removed
-- [x] Mid-trial upgrade to Growth/Pro bills immediately (cancel trial sub + re-checkout); ITN creation amount check validates checkout tier
-- [x] Send SMS action on PatientDetail (`SendSmsDialog` → `POST /api/sms/send`)
+## Messaging (Sendexa — SMS, WhatsApp, email)
+- [ ] Sendexa account setup: API token, approved SMS sender ID, WhatsApp number + approved templates, verified email domain — see `docs/sendexa.md`
+- [ ] Confirm Sendexa delivers to South African (+27) numbers — docs examples are all Ghana (+233)
+- [ ] Add Sendexa env vars to Vercel Production (`SENDEXA_API_TOKEN`, `SENDEXA_SMS_FROM`, `SENDEXA_EMAIL_FROM`, `SENDEXA_WEBHOOK_SECRET`)
+- [ ] Register `/api/sendexa/webhook` in Sendexa and confirm the delivery-event payload (route accepts `{ messageId, status }` or `{ event, data: { messageId } }`)
+- [ ] Confirm the WhatsApp template request shape with a real send (assumed Meta Cloud API format)
+- [ ] Remove Twilio env vars from Vercel if any were added (Twilio replaced)

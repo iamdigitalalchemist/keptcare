@@ -6,7 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Phone, Mail, Calendar, MessageSquare, CheckCircle, XCircle, Clock, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, Phone, Mail, Calendar, MessageSquare, MessageCircle, CheckCircle, XCircle, Clock, Pencil, Trash2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   AlertDialog,
@@ -23,7 +23,7 @@ import { formatDate, formatNumber } from "@/lib/utils";
 import { usePracticeData, usePracticeMutations } from "@/lib/practice-data";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 import { AddPatientDialog } from "@/components/AddPatientDialog";
-import { SendSmsDialog } from "@/components/SendSmsDialog";
+import { SendMessageDialog, blockedReason, type MessageChannel } from "@/components/SendMessageDialog";
 import { toast } from "sonner";
 
 const statusColors: Record<string, string> = {
@@ -49,10 +49,10 @@ export default function PatientDetail() {
   const { id } = useParams();
   const router = useRouter();
   const { data, isLoading, organisationId } = usePracticeData();
-  const { organisation, canSendSms } = useSubscription();
+  const { organisation, limits, canSendOn } = useSubscription();
   const { updatePatient, deletePatient } = usePracticeMutations();
   const [editOpen, setEditOpen] = useState(false);
-  const [smsOpen, setSmsOpen] = useState(false);
+  const [messageChannel, setMessageChannel] = useState<MessageChannel | null>(null);
   const { patients, appointments, communicationLogs, messageTemplates } = data;
   const patient = patients.find((p) => p.id === id);
 
@@ -84,9 +84,10 @@ export default function PatientDetail() {
         mode="edit"
         onAdd={(updatedPatient) => updatePatient.mutate(updatedPatient)}
       />
-      <SendSmsDialog
-        open={smsOpen}
-        onOpenChange={setSmsOpen}
+      <SendMessageDialog
+        open={messageChannel !== null}
+        onOpenChange={(open) => !open && setMessageChannel(null)}
+        channel={messageChannel ?? "sms"}
         patient={patient}
         templates={messageTemplates}
         practiceName={organisation?.name ?? ""}
@@ -117,24 +118,32 @@ export default function PatientDetail() {
                     <Button variant="outline" size="sm" className="h-7" onClick={() => setEditOpen(true)}>
                       <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7"
-                      disabled={!canSendSms || !patient.consentSms || !patient.phone}
-                      title={
-                        !canSendSms
-                          ? "SMS is available on the paid Growth and Pro plans"
-                          : !patient.consentSms
-                            ? "Patient has not consented to SMS"
-                            : !patient.phone
-                              ? "No phone number on file"
-                              : undefined
-                      }
-                      onClick={() => setSmsOpen(true)}
-                    >
-                      <MessageSquare className="h-3.5 w-3.5 mr-1" /> Send SMS
-                    </Button>
+                    {([
+                      ["sms", "SMS", MessageSquare],
+                      ["whatsapp", "WhatsApp", MessageCircle],
+                      ["email", "Email", Mail],
+                    ] as const).map(([channel, label, Icon]) => {
+                      const reason = !limits.channels.includes(channel)
+                        ? `${label} is not on your plan`
+                        : !canSendOn(channel)
+                          ? channel === "email"
+                            ? "Your subscription is not active"
+                            : `${label} needs an active paid plan (not available during the trial)`
+                          : blockedReason(patient, channel);
+                      return (
+                        <Button
+                          key={channel}
+                          variant="outline"
+                          size="sm"
+                          className="h-7"
+                          disabled={reason !== null}
+                          title={reason ?? undefined}
+                          onClick={() => setMessageChannel(channel)}
+                        >
+                          <Icon className="h-3.5 w-3.5 mr-1" /> {label}
+                        </Button>
+                      );
+                    })}
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button variant="outline" size="sm" className="h-7 text-destructive hover:text-destructive">

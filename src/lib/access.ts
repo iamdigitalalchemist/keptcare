@@ -1,5 +1,5 @@
 // Subscription access rules, shared by the client gates (SubscriptionContext,
-// ProtectedRoute) and server routes (e.g. /api/sms/send) so they can't drift.
+// ProtectedRoute) and server routes (e.g. /api/messages/send) so they can't drift.
 // Pure functions — safe in client components and server code.
 import { TIER_LIMITS } from "@/lib/limits";
 import type { Tier } from "@/lib/payfast";
@@ -41,7 +41,19 @@ export function hasAccess(org: BillingState, now = Date.now()): boolean {
  * though trial_ends_at is still in the future.
  */
 export function canSendSms(org: BillingState, now = Date.now()): boolean {
+  return canSendOn(org, "sms", now);
+}
+
+export type MessageChannel = "email" | "sms" | "whatsapp";
+
+/**
+ * Whether the org may send on a channel: the org must be active and the tier
+ * must include the channel. SMS and WhatsApp cost money per message, so they
+ * need PAID access (same reasoning as canSendSms); email also works during the
+ * free trial, since Starter (the trial plan) is email-only.
+ */
+export function canSendOn(org: BillingState, channel: MessageChannel, now = Date.now()): boolean {
   if (org.status && org.status !== "active") return false;
-  if (!TIER_LIMITS[org.subscription_tier].channels.includes("sms")) return false;
-  return hasPaidAccess(org, now);
+  if (!TIER_LIMITS[org.subscription_tier].channels.includes(channel)) return false;
+  return channel === "email" ? hasAccess(org, now) : hasPaidAccess(org, now);
 }

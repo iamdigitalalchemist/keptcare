@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { canSendSms, hasAccess, hasPaidAccess, isTrialActive, PERIOD_END_GRACE_MS, type BillingState } from "./access";
+import { TIER_LIMITS } from "./limits";
+import { canSendOn, canSendSms, hasAccess, hasPaidAccess, isTrialActive, PERIOD_END_GRACE_MS, type BillingState } from "./access";
 
 const NOW = Date.parse("2026-10-12T12:00:00Z");
 const DAY = 24 * 60 * 60 * 1000;
@@ -72,5 +73,32 @@ describe("canSendSms", () => {
   it("blocks suspended organisations and lapsed subscriptions", () => {
     expect(canSendSms(paid({ status: "suspended" }), NOW)).toBe(false);
     expect(canSendSms(paid({ subscription_period_end: iso(NOW - 10 * DAY) }), NOW)).toBe(false);
+  });
+});
+
+describe("canSendOn", () => {
+  const trial = (tier: BillingState["subscription_tier"]): BillingState =>
+    paid({ subscription_tier: tier, subscription_active: false, subscription_period_end: null, trial_ends_at: iso(NOW + 5 * DAY) });
+
+  it("lets Starter send email during the trial and when paid, but never SMS or WhatsApp", () => {
+    expect(canSendOn(trial("starter"), "email", NOW)).toBe(true);
+    expect(canSendOn(paid({ subscription_tier: "starter" }), "email", NOW)).toBe(true);
+    expect(canSendOn(paid({ subscription_tier: "starter" }), "sms", NOW)).toBe(false);
+    expect(canSendOn(paid({ subscription_tier: "starter" }), "whatsapp", NOW)).toBe(false);
+  });
+
+  it("keeps WhatsApp to the tiers that include it, and paid access only", () => {
+    expect(canSendOn(paid({ subscription_tier: "pro" }), "whatsapp", NOW)).toBe(true);
+    expect(canSendOn(trial("pro"), "whatsapp", NOW)).toBe(false);
+    expect(canSendOn(paid({ subscription_tier: "growth" }), "whatsapp", NOW)).toBe(
+      TIER_LIMITS.growth.channels.includes("whatsapp"),
+    );
+  });
+
+  it("blocks every channel for suspended or lapsed orgs", () => {
+    for (const ch of ["email", "sms", "whatsapp"] as const) {
+      expect(canSendOn(paid({ subscription_tier: "pro", status: "suspended" }), ch, NOW)).toBe(false);
+      expect(canSendOn(paid({ subscription_tier: "pro", subscription_period_end: iso(NOW - 10 * DAY) }), ch, NOW)).toBe(false);
+    }
   });
 });
